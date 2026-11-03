@@ -1,0 +1,107 @@
+/* Эффекты закрытия задач, скоупов и цели (см. fx.js). */
+
+/* Связанный налив: общий бар дорастает с задержкой после бара скоупа */
+.bar.main i { transition-delay: .3s; }
+
+/* Галочка, подсветка строки */
+.ck { display: inline-grid; flex: none; position: relative; }
+.cl input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; border: 1.5px solid var(--faint); border-radius: 5px; background: var(--surface); cursor: pointer; transition: background .2s, border-color .2s; }
+.cl input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+.ck svg { display: block; position: absolute; inset: 0; width: 18px; height: 18px; pointer-events: none; }
+.ck path { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 14; stroke-dashoffset: 14; }
+.ck input:checked + svg path { stroke-dashoffset: 0; }
+.justdone .ck input { animation: fx-box .2s both; }
+.justdone .ck path { animation: fx-draw .35s .12s cubic-bezier(.4, 0, .2, 1) both; }
+.cl li { position: relative; isolation: isolate; }
+.cl li.justdone::before, .cl li.settle::before { content: ""; position: absolute; inset: 3px -10px; border-radius: 9px; background: color-mix(in srgb, var(--c) 14%, transparent); z-index: -1; }
+.cl li.justdone::before { animation: fx-fade-in .3s both; }
+.cl li.settle::before { animation: fx-fade-out .8s .3s both; }
+@keyframes fx-box { from { background: var(--surface); border-color: var(--faint); } }
+@keyframes fx-draw { from { stroke-dashoffset: 14; } to { stroke-dashoffset: 0; } }
+@keyframes fx-fade-in { from { opacity: 0; } }
+@keyframes fx-fade-out { to { opacity: 0; } }
+
+/* Всплывающий вклад */
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 25; }
+.fx-float { position: absolute; transform: translate(-50%, -100%); font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--c); text-shadow: 0 0 6px var(--surface), 0 0 2px var(--surface); white-space: nowrap; animation: fx-float 1.3s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes fx-float {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+  20% { opacity: 1; transform: translate(-50%, -120%) scale(1.08); }
+  65% { opacity: 1; transform: translate(-50%, -150%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -260%); }
+}
+
+/* Состояние «Скоуп закрыт» */
+.sc { grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) 132px; }
+.sc.closed { background: color-mix(in srgb, var(--c) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c) 22%, transparent); }
+.sc.closed:hover, .sc.closed[aria-pressed="true"] { background: color-mix(in srgb, var(--c) 13%, var(--surface)); border-color: color-mix(in srgb, var(--c) 38%, transparent); }
+.sc .ok { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; width: 100%; font-family: var(--body); font-size: 13px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }
+.sc .ok svg { width: 20px; height: 20px; flex: none; }
+.sc .ok circle { fill: var(--c); }
+.sc .ok path { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sc.justclosed { animation: fx-sc-fill .7s .55s backwards; }
+.sc.justclosed .ok { animation: fx-pop .55s .6s cubic-bezier(.3, 1.6, .5, 1) backwards; }
+@keyframes fx-sc-fill { from { background: var(--surface); border-color: transparent; } }
+@keyframes fx-pop { from { opacity: 0; transform: scale(.4); } }
+
+/* Запечатанный отрезок на общем баре */
+.bar.main i { position: relative; overflow: hidden; }
+.bar.main i.sealed::before { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(255, 255, 255, .38), rgba(255, 255, 255, 0) 75%); }
+.bar.main i.justsealed::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, .9) 50%, transparent 75%); animation: fx-glint .9s .9s ease-in-out both; }
+@keyframes fx-glint { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* Конфетти и финал */
+.fx-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 29; }
+.finale { position: fixed; inset: 0; z-index: 28; display: grid; place-items: center; padding: 24px 16px; text-align: center; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fx-fade-in .4s both; overflow-y: auto; }
+.finale.out { animation: fx-fade-out .25s both; }
+.finale .card { width: 100%; max-width: 560px; }
+.finale h2 { font-size: clamp(18px, 2.4vw, 22px); margin: 0; }
+.finale .big { font-family: var(--display); font-weight: 600; font-size: clamp(96px, 24vw, 184px); line-height: 1; letter-spacing: -.04em; margin: 16px 0 24px; animation: fx-big .8s .1s cubic-bezier(.3, 1.5, .5, 1) both; }
+.finale .big small { font-size: .38em; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.finale .stats { display: flex; justify-content: center; gap: 12px; margin: 28px 0 24px; flex-wrap: wrap; }
+.finale .stat { display: grid; gap: 2px; min-width: 150px; padding: 14px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.finale .stat b { font-family: var(--display); font-weight: 600; font-size: 26px; letter-spacing: -.02em; }
+.finale .stat span { font-size: 13px; color: var(--muted); }
+@keyframes fx-big { from { opacity: 0; transform: scale(.6); } }
+
+/* Пружинка цифры */
+.fx-bounce { animation: fx-bounce .5s cubic-bezier(.3, 1.8, .5, 1); }
+.hero.fx-bounce { transform-origin: 50% 70%; }
+.sc .p.fx-bounce { transform-origin: 100% 60%; }
+@keyframes fx-bounce { 40% { transform: scale(1.16); } }
+
+/* Импульс по треку */
+.fx-wave { position: absolute; top: 0; bottom: 0; width: 56px; margin-left: -8px; pointer-events: none; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c) 45%, transparent), transparent); }
+
+/* Серия */
+.fx-streak { position: absolute; z-index: 24; padding: 4px 10px; border-radius: 99px; background: var(--ink); color: var(--surface); font-family: var(--display); font-size: 14px; font-weight: 600; white-space: nowrap; pointer-events: none; opacity: 0; transform: scale(.6); transition: opacity .4s, transform .4s; }
+.fx-streak.show { opacity: 1; transform: none; animation: fx-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+
+/* Кольцо вокруг галочки закрытого скоупа */
+.sc .okic { position: relative; display: inline-grid; }
+.sc.justclosed .okic::before, .sc.justclosed .okic::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--c); animation: fx-ring 1s .75s ease-out both; }
+.sc.justclosed .okic::after { animation-delay: .95s; }
+@keyframes fx-ring { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(2.8); } }
+
+/* Веха */
+.fx-milestone { position: absolute; z-index: 24; transform: translate(-50%, -100%); padding: 6px 14px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(23, 26, 43, .12); font-size: 14px; font-weight: 500; white-space: nowrap; pointer-events: none; animation: fx-milestone 3.2s cubic-bezier(.3, 1.4, .5, 1) both; }
+.fx-milestone b { font-family: var(--display); color: var(--accent); margin-right: 4px; }
+.fx-tick { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--ink); pointer-events: none; animation: fx-tick 2s ease-out both; }
+@keyframes fx-milestone { 0% { opacity: 0; transform: translate(-50%, -60%) scale(.6); } 12%, 85% { opacity: 1; transform: translate(-50%, -100%); } 100% { opacity: 0; transform: translate(-50%, -130%); } }
+@keyframes fx-tick { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Сборка бара на финале */
+.finale .bar i { transition: width .45s cubic-bezier(.2, .7, .2, 1); }
+.finale .bar i.now { animation: fx-flash .5s ease-out; }
+@keyframes fx-flash { 0% { filter: brightness(1.6); } }
+
+/* Кнопка звука */
+.sound { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 22; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); font-size: 16px; line-height: 1; box-shadow: 0 4px 16px rgba(23, 26, 43, .08); }
+.sound:hover { border-color: var(--faint); }
+
+@media (max-width: 560px) {
+  .sc { grid-template-columns: minmax(0, 1fr) auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; }
+}
