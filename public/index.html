@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Прогресс команды</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="l1">
+    <p class="kicker">Главная цель</p>
+    <h1 id="goalTitle">&nbsp;</h1>
+    <div class="hero" id="hero">—</div>
+    <div class="bar main" id="mainbar" role="img" aria-label="Общий прогресс"></div>
+  </header>
+
+  <section class="l2" aria-labelledby="l2h">
+    <h2 id="l2h">Цели по скоупам</h2>
+    <div class="scopes" id="scopes"><p class="loading">Загружаем задачи…</p></div>
+  </section>
+
+  <section class="l3" aria-labelledby="l3h">
+    <div class="l3head">
+      <h2 id="l3h">Задачи</h2>
+      <button class="ghost" id="editBtn" type="button">Изменить список</button>
+    </div>
+    <div id="tasks"></div>
+  </section>
+
+  <details class="foot" id="goalPanel">
+    <summary>Изменить главную цель</summary>
+    <form class="goalform" id="goalForm">
+      <label for="gT">Название цели</label>
+      <input id="gT" required maxlength="200">
+      <button class="btn" type="submit">Сохранить</button>
+    </form>
+  </details>
+</div>
+
+<p class="offline" id="offline" hidden>Нет связи с сервером, переподключаемся…</p>
+
+<dialog id="dlg" aria-labelledby="dTitle">
+  <h3 id="dTitle"></h3>
+  <p id="dText"></p>
+  <div class="dact">
+    <button class="btn" id="dNo" type="button">Отмена</button>
+    <button class="btn primary" id="dOk" type="button"></button>
+  </div>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

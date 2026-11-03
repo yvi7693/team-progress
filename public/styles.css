@@ -1,0 +1,100 @@
+:root {
+  --bg: #F3F4F8;
+  --surface: #FFFFFF;
+  --ink: #171A2B;
+  --muted: #626781;
+  --faint: #9A9EB5;
+  --line: #E2E4EE;
+  --track: #E8EAF2;
+  --accent: #4A45D1;
+  --accent-ink: #FFFFFF;
+  --display: "Unbounded", "Golos Text", system-ui, sans-serif;
+  --body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.wrap { max-width: 980px; margin: 0 auto; padding: max(48px, env(safe-area-inset-top)) 20px 64px; }
+
+/* Уровень 1: главная цель */
+.l1 { text-align: center; max-width: 680px; margin: 0 auto 56px; }
+.kicker { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+h1 { font-weight: 600; font-size: clamp(20px, 2.6vw, 26px); line-height: 1.25; margin: 0; }
+.hero { font-family: var(--display); font-weight: 600; font-size: clamp(76px, 13vw, 128px); line-height: 1; letter-spacing: -.04em; margin: 18px 0 26px; }
+.hero small { font-size: .38em; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+
+.bar { position: relative; height: 10px; background: var(--track); border-radius: 99px; overflow: hidden; display: block; }
+.bar.main { height: 14px; display: flex; }
+.bar i { display: block; height: 100%; transition: width .6s cubic-bezier(.2, .7, .2, 1); }
+.bar.main i { flex: none; }
+.bar.main i + i { box-shadow: inset 2px 0 0 var(--bg); }
+
+/* Уровень 2: цели по скоупам */
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 14px; }
+.l2 { margin-bottom: 44px; }
+.scopes { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px; }
+.sc { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) 64px; gap: 20px; align-items: center; width: 100%; padding: 14px; border: 1px solid transparent; border-radius: 10px; background: none; text-align: left; transition: background .15s, border-color .15s; }
+.sc:hover { background: var(--bg); }
+.sc[aria-pressed="true"] { background: var(--bg); border-color: var(--line); }
+.sc .n { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 14px; }
+.dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sc .bar i { border-radius: 99px; }
+.sc .p { font-family: var(--display); font-size: 20px; text-align: right; letter-spacing: -.02em; }
+.sc .p small { font-size: .6em; color: var(--muted); margin-left: 1px; }
+
+/* Уровень 3: задачи */
+.l3 { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.l3head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.l3head h2 { margin: 0; display: flex; align-items: center; gap: 10px; }
+.ghost { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 6px 8px; border-radius: 8px; white-space: nowrap; }
+.ghost:hover { color: var(--ink); background: var(--bg); }
+.ghost.on { color: var(--accent); font-weight: 500; }
+.cl { list-style: none; margin: 0; padding: 0; }
+.cl li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.cl li:first-child { border-top: 0; }
+.cl label { display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; min-width: 0; }
+.cl input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; margin: 0; }
+.cl .t { overflow-wrap: anywhere; }
+.cl .done .t { color: var(--faint); text-decoration: line-through; }
+.w { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; flex: none; }
+.del { border: 0; background: none; color: var(--faint); padding: 2px 6px; border-radius: 6px; font-size: 16px; line-height: 1; }
+.del:hover { color: var(--ink); background: var(--bg); }
+.add { display: flex; gap: 8px; margin-top: 10px; }
+.add input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.add select { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 6px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-weight: 500; }
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.empty, .loading { color: var(--muted); font-size: 14px; padding: 8px 0; margin: 0; }
+.loading { text-align: center; padding: 24px 0; }
+
+/* Настройки цели */
+.foot { margin-top: 28px; text-align: center; }
+.foot summary { display: inline-block; cursor: pointer; color: var(--faint); font-size: 13px; list-style: none; }
+.foot summary::-webkit-details-marker { display: none; }
+.foot summary:hover { color: var(--muted); }
+.goalform { display: grid; gap: 8px; margin: 14px auto 0; max-width: 360px; text-align: left; }
+.goalform input { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px; width: 100%; }
+.goalform label { font-size: 12px; color: var(--muted); }
+
+/* Диалог, уведомления */
+dialog { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); padding: 22px; max-width: 420px; width: calc(100% - 32px); }
+dialog::backdrop { background: rgba(23, 26, 43, .35); }
+dialog h3 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+dialog p { margin: 0 0 18px; color: var(--muted); }
+.dact { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.toast, .offline { position: fixed; left: 50%; transform: translateX(-50%); border-radius: 12px; font-weight: 500; max-width: 90vw; z-index: 20; }
+.toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 10px 16px; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.toast.show { opacity: 1; }
+.offline { top: calc(12px + env(safe-area-inset-top, 0px)); margin: 0; background: #FFF1DE; color: #8A4A00; padding: 8px 14px; font-size: 13px; }
+
+@media (max-width: 560px) {
+  .wrap { padding-top: 32px; }
+  .l1 { margin-bottom: 40px; }
+  .sc { grid-template-columns: minmax(0, 1fr) 56px; gap: 10px 12px; }
+  .sc .bar { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
