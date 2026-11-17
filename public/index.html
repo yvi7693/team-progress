@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <title>Прогресс команды</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+<link rel="icon" type="image/png" href="/brand/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14,26 +14,30 @@
 </head>
 <body>
 <div class="wrap">
+  <a class="brand" href="https://yvi7693.github.io/sgames-site/" target="_blank" rel="noopener" aria-label="S.Games" title="S.Games">
+    <img src="/brand/s-games-logo.png" alt="" width="56" height="65">
+  </a>
   <header class="l0">
     <p class="kicker">Главная цель</p>
     <h1 id="goalTitle">&nbsp;</h1>
-    <p class="metric" id="metric"></p>
   </header>
 
-  <nav class="ladder" aria-label="Рубежи на пути к цели">
+  <section class="l1" aria-label="Прогресс активной волны">
+    <div class="hero" id="hero">—</div>
+    <div class="bar main waves" id="mainbar" role="img" aria-label="Прогресс волны"></div>
+    <div class="wavemarks" id="wavemarks" aria-hidden="true"></div>
+    <p class="metric" id="metric"></p>
+  </section>
+
+  <nav class="ladder" aria-label="Волны на пути к цели">
     <ol id="ladder"></ol>
   </nav>
 
-  <section class="l1" aria-labelledby="msTitle">
-    <p class="kicker" id="msKicker"></p>
-    <h2 class="mst" id="msTitle">&nbsp;</h2>
-    <p class="crit-line" id="msCriterion"></p>
-    <div class="hero" id="hero">—</div>
-    <div class="bar main" id="mainbar" role="img" aria-label="Прогресс рубежа"></div>
-  </section>
-
-  <section class="l2" aria-labelledby="l2h">
-    <h2 id="l2h">Аспекты рубежа</h2>
+  <section class="l2" aria-labelledby="msTitle">
+    <div class="wavehead">
+      <h2 class="mst" id="msTitle">&nbsp;</h2>
+      <p class="crit-line" id="msCriterion"></p>
+    </div>
     <div class="scopes" id="scopes"><p class="loading">Загружаем задачи…</p></div>
   </section>
 
@@ -53,7 +57,7 @@
       <input id="gT" required maxlength="200">
       <label for="gM" id="gMl">Показатель</label>
       <input id="gM" type="number" min="0" step="1" inputmode="numeric">
-      <label for="gA">Активный рубеж</label>
+      <label for="gA">Активная волна</label>
       <select id="gA"></select>
       <button class="btn" type="submit">Сохранить</button>
     </form>

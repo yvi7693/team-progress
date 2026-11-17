@@ -1,4 +1,4 @@
-// Клиент дашборда: главная цель → лестница рубежей → аспекты рубежа → задачи.
+// Клиент дашборда: главная цель → прогресс активной волны → волны → аспекты выбранной волны → задачи.
 // Получает обновления от сервера в реальном времени.
 import { calm, countUp, floatPlus, wave, streakHit, milestone, scopeConfetti, shades, closedBadge, showFinale, play, vibrate, initSoundToggle } from './fx.js';
 
@@ -7,7 +7,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const nf = new Intl.NumberFormat('ru-RU');
 
 let state = null;
-let view = null;        // рубеж, который сейчас смотрят (по умолчанию активный)
+let view = null;        // волна, аспекты которой сейчас смотрят (по умолчанию активная)
 let sel = null;         // выбранный аспект
 let editMode = false;
 let pending = null;     // { id, mode: 'close' | 'reopen' }
@@ -19,6 +19,7 @@ const fresh = new Set();
 const held = new Set();
 const settling = new Set();
 const justClosed = new Set();
+const justSealed = new Set(); // аспекты активной волны, только что закрытые: блик на главном баре
 
 function toast(msg) {
   const t = $('toast');
@@ -47,6 +48,7 @@ const scopeById = (id) => state.scopes.find((s) => s.id === id);
 const msById = (id) => state.milestones.find((m) => m.id === id);
 const msSummary = (id) => state.summary.milestones.find((m) => m.id === id);
 const viewSummary = () => msSummary(view);
+const mainSummary = () => msSummary(state.activeMilestone);
 const scopeSummary = (id) => viewSummary().scopes.find((s) => s.id === id);
 const openBlockers = (t) => state.summary.blockersOpen[t.id] || [];
 const tasksOf = (scopeId) => state.tasks
@@ -56,18 +58,24 @@ const isClosed = (s) => s.percent === 100 && s.tasksTotal > 0;
 const pctHtml = (n) => `${n}<small>%</small>`;
 const fmtDate = (ms) => (ms ? new Date(ms).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : '');
 
-function snapshot(ms) {
-  return { ms: ms.id, total: ms.percent, scopes: Object.fromEntries(ms.scopes.map((s) => [s.id, { percent: s.percent, share: s.share }])) };
+// Главный блок показывает активную волну, аспекты — выбранную; анимации идут от прошлых значений каждого.
+function snapshot(main, viewed) {
+  return {
+    main: main.id, total: main.percent, shares: Object.fromEntries(main.scopes.map((s) => [s.id, s.share])),
+    view: viewed.id, scopes: Object.fromEntries(viewed.scopes.map((s) => [s.id, s.percent])),
+  };
 }
 
 function renderGoal() {
   const { goal } = state;
   $('goalTitle').textContent = goal.title;
   const m = goal.metric || {};
-  const next = (m.ladder || []).find((s) => s.value > m.value);
-  $('metric').innerHTML = m.label
-    ? `<b>${esc(m.label)}: ${nf.format(m.value || 0)}</b>${next ? `<span>следующая ступень ${nf.format(next.value)}${next.label ? ` — ${esc(next.label)}` : ''}</span>` : ''}`
-    : '';
+  // Счётчики под баром: показатель цели и продажи. Продаж пока нет — счётчик закрыт до релиза.
+  $('metric').innerHTML = `${m.label ? `<div class="stat"><b>${nf.format(m.value || 0)}</b><span>${esc(m.label)}</span></div>` : ''}
+    <div class="stat locked" title="Счётчик откроется, когда игра начнёт продаваться">
+      <b><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg></b>
+      <span>Продажи</span>
+    </div>`;
   if (document.activeElement !== $('gT')) $('gT').value = goal.title;
   if (document.activeElement !== $('gM')) $('gM').value = m.value ?? 0;
   $('gMl').textContent = m.label || 'Показатель';
@@ -77,7 +85,7 @@ function renderGoal() {
 function renderLadder() {
   $('ladder').innerHTML = state.milestones.map((m, i) => {
     const s = msSummary(m.id);
-    const status = s.closed ? 'взят' : m.id === state.activeMilestone ? 'сейчас' : '';
+    const status = s.closed ? 'пройдена' : m.id === state.activeMilestone ? 'сейчас' : '';
     return `<li><button type="button" class="step${s.closed ? ' done' : ''}${m.id === state.activeMilestone ? ' active' : ''}" data-ms="${esc(m.id)}" aria-pressed="${m.id === view}">
       <span class="num">${s.closed ? '✓' : i + 1}</span>
       <span class="sttl">${esc(m.title)}</span>
@@ -92,57 +100,68 @@ function renderLadder() {
 function render(animate = false) {
   if (!state) return;
   if (!view || !msById(view)) view = state.activeMilestone;
-  const ms = msById(view);
+  const main = mainSummary();
+  const ms = msById(main.id);
   const sum = viewSummary();
-  const from = animate && shown?.ms === view ? shown : null;
-  const barFrom = from && !calm ? from : null;
-  const idx = state.milestones.indexOf(ms) + 1;
+  const fromMain = animate && !calm && shown?.main === main.id ? shown : null;
+  const fromView = animate && !calm && shown?.view === view ? shown : null;
 
-  document.title = `${ms.title}: ${sum.percent}% — ${state.goal.title}`;
+  document.title = `${ms.title}: ${main.percent}% — ${state.goal.title}`;
   renderGoal();
   renderLadder();
 
-  $('msKicker').textContent = `Рубеж ${idx}${ms.date ? ` · ${ms.date}` : ''}${view === state.activeMilestone ? ' · сейчас' : ''}`;
-  $('msTitle').textContent = ms.title;
-  $('msCriterion').textContent = ms.criterion ? `Взят, когда: ${ms.criterion}` : '';
-  $('hero').innerHTML = pctHtml(sum.percent);
-  $('mainbar').setAttribute('aria-label', `Прогресс рубежа ${sum.percent}%`);
-  $('mainbar').innerHTML = sum.scopes.map((s) => {
-    const cls = isClosed(s) ? `sealed${justClosed.has(s.id) ? ' justsealed' : ''}` : '';
-    const w = barFrom?.scopes[s.id]?.share ?? s.share;
-    return `<i class="${cls}" data-w="${s.share}" style="width:${w}%;background:${s.color}" title="${esc(s.name)}: ${Math.round(s.share)}% рубежа"></i>`;
+  // Название и условие — у выбранной волны: они стоят над её аспектами.
+  const viewed = msById(view);
+  $('msTitle').textContent = viewed.title;
+  $('msCriterion').textContent = viewed.criterion || '';
+  $('hero').innerHTML = pctHtml(main.percent);
+  // Главный бар — весь путь к цели: отрезок на волну шириной по весу её задач,
+  // зазор между отрезками — метка волны. Внутри отрезка — прогресс волны цветами аспектов.
+  const weightOf = (msId) => state.tasks.filter((t) => t.milestone === msId).reduce((n, t) => n + t.weight, 0);
+  const waves = state.summary.milestones.map((m, i) => ({ m, i, w: weightOf(m.id) })).filter((x) => x.w > 0);
+  $('mainbar').setAttribute('aria-label', `Прогресс волны «${ms.title}» ${main.percent}%, волн на пути к цели: ${waves.length}`);
+  $('mainbar').innerHTML = waves.map(({ m, i, w }) => {
+    const active = m.id === main.id;
+    const segs = m.scopes.map((s) => {
+      const cls = isClosed(s) ? `sealed${active && justSealed.has(s.id) ? ' justsealed' : ''}` : '';
+      const from = active ? fromMain?.shares[s.id] : null;
+      return `<i class="${cls}" data-w="${s.share}" style="width:${from ?? s.share}%;background:${s.color}" title="${esc(s.name)}: ${Math.round(s.share)}% волны"></i>`;
+    }).join('');
+    return `<span class="wv${active ? ' active' : ''}${m.closed ? ' done' : ''}" style="flex:${w}" title="${i + 1}. ${esc(msById(m.id).title)}: ${m.percent}%">${segs}</span>`;
   }).join('');
+  $('wavemarks').innerHTML = waves.map(({ m, i, w }) =>
+    `<span class="${m.id === main.id ? 'active' : ''}${m.closed ? ' done' : ''}" style="flex:${w}">${m.closed ? '✓' : i + 1}</span>`).join('');
+  justSealed.clear();
 
   const withTasks = sum.scopes.filter((s) => s.tasksTotal);
   if (!sel || !scopeById(sel) || !scopeSummary(sel).tasksTotal) sel = [...withTasks].sort((a, b) => a.percent - b.percent)[0]?.id ?? sum.scopes[0]?.id;
 
-  const aims = state.aims[view] || {};
   $('scopes').innerHTML = state.scopes.map((s) => {
     const ss = scopeSummary(s.id);
     const p = ss.percent;
     const empty = !ss.tasksTotal;
     const closed = isClosed(ss);
     const cls = ['sc', closed && 'closed', closed && justClosed.has(s.id) && 'justclosed', empty && 'noitems'].filter(Boolean).join(' ');
-    const w = barFrom?.scopes[s.id]?.percent ?? p;
+    const w = fromView?.scopes[s.id] ?? p;
     return `<button class="${cls}" type="button" data-scope="${esc(s.id)}" aria-pressed="${sel === s.id}" style="--c:${s.color}">
-      <span class="n"><span class="dot" style="background:${s.color}"></span><span>${esc(s.name)}<small>${empty ? 'в этом рубеже задач нет' : `${ss.tasksDone} из ${ss.tasksTotal} задач`}</small></span></span>
+      <span class="n"><span class="dot" style="background:${s.color}"></span><span>${esc(s.name)}<small>${empty ? 'в этой волне задач нет' : `${ss.tasksDone} из ${ss.tasksTotal} задач`}</small></span></span>
       <span class="bar"><i data-w="${p}" style="width:${w}%;background:${s.color}"></i></span>
       <span class="p">${empty ? '—' : closed ? closedBadge : pctHtml(p)}</span></button>`;
   }).join('');
   justClosed.clear();
 
-  if (barFrom) {
+  if (fromMain || fromView) {
     void $('scopes').offsetWidth; // фиксируем старую ширину, чтобы сработал transition
-    document.querySelectorAll('#mainbar i, #scopes .bar i').forEach((i) => { i.style.width = `${i.dataset.w}%`; });
+    document.querySelectorAll(`${fromMain ? '#mainbar .wv.active i,' : ''}${fromView ? '#scopes .bar i' : ''}`.replace(/,$/, '')).forEach((i) => { i.style.width = `${i.dataset.w}%`; });
   }
-  if (from) {
-    countUp($('hero'), from.total, sum.percent, { delay: 300, format: pctHtml });
+  if (fromMain) countUp($('hero'), fromMain.total, main.percent, { delay: 300, format: pctHtml });
+  if (fromView) {
     sum.scopes.forEach((s) => {
       const el = document.querySelector(`.sc[data-scope="${CSS.escape(s.id)}"]:not(.closed):not(.noitems) .p`);
-      if (el && from.scopes[s.id]) countUp(el, from.scopes[s.id].percent, s.percent, { format: pctHtml });
+      if (el && fromView.scopes[s.id] != null) countUp(el, fromView.scopes[s.id], s.percent, { format: pctHtml });
     });
   }
-  shown = snapshot(sum);
+  shown = snapshot(main, sum);
   renderTasks();
 }
 
@@ -174,7 +193,7 @@ function renderTasks() {
         </div>${details}
       </li>`;
     }).join('')}</ul>` +
-    (list.length ? '' : '<p class="empty">У этого аспекта в рубеже пока нет задач.</p>') +
+    (list.length ? '' : '<p class="empty">У этого аспекта в волне пока нет задач.</p>') +
     (editMode ? `<form class="add" id="addForm">
       <div class="addrow">
         <input name="ttl" placeholder="Результат, например «Котики первой волны в финальном арте»" aria-label="Новая задача" maxlength="200">
@@ -200,21 +219,23 @@ function flipTasks(ids) {
 
 const barOf = (id) => document.querySelector(`.sc[data-scope="${CSS.escape(id)}"] .bar`);
 
-function tasksClosedFx(deltas, count, prevTotal) {
-  const total = viewSummary().percent;
+// deltas — прирост аспектов выбранной волны; mainScopes и prevTotal — для главного блока (активная волна).
+function tasksClosedFx(deltas, mainScopes, count, prevTotal) {
   deltas.forEach((delta, id) => {
     const s = scopeSummary(id);
     const bar = barOf(id);
     if (!bar || delta <= 0) return;
     floatPlus(bar, s.percent, `+${delta}%`, s.color, 150);
     wave(bar, s.percent, s.color, 650);
-    wave($('mainbar'), total, s.color, 950);
   });
+  const total = mainSummary().percent;
+  const activeSeg = () => $('mainbar').querySelector('.wv.active') || $('mainbar');
+  mainScopes.forEach((id) => wave(activeSeg(), total, scopeById(id).color, 950));
   const n = streakHit($('hero').querySelector('small') || $('hero'), count);
   play('task', Math.min(n - 1, 6) * 2);
   vibrate('task');
-  const crossed = [75, 50, 25].find((m) => prevTotal < m && total >= m && total < 100);
-  if (crossed) setTimeout(() => milestone($('hero'), $('mainbar'), crossed), 1000);
+  const crossed = prevTotal != null && [75, 50, 25].find((m) => prevTotal < m && total >= m && total < 100);
+  if (crossed) setTimeout(() => milestone($('hero'), activeSeg(), crossed), 1000);
 }
 
 function scopeClosedFx(id) {
@@ -233,7 +254,7 @@ function finale(msId) {
   const totalW = list.reduce((n, t) => n + t.weight, 0) || 1;
   const withTasks = s.scopes.filter((x) => x.tasksTotal);
   showFinale({
-    kicker: 'Рубеж взят',
+    kicker: 'Волна пройдена',
     title: esc(msById(msId).title),
     tasksDone: s.tasksDone,
     scopesDone: withTasks.length,
@@ -243,34 +264,42 @@ function finale(msId) {
   });
 }
 
-// Пришло новое состояние: находим закрытые задачи, аспекты и рубеж и проигрываем эффекты.
+// Пришло новое состояние: находим закрытые задачи, аспекты и волны и проигрываем эффекты.
 function celebrate(prev) {
   const was = (id) => prev.tasks.find((t) => t.id === id);
   const closedTasks = state.tasks.filter((t) => t.done && was(t.id) && !was(t.id).done);
-  const prevMs = prev.summary.milestones.find((m) => m.id === view);
-  const curMs = msSummary(view);
-  const closedScopes = prevMs && curMs ? curMs.scopes.filter((s) => {
-    const before = prevMs.scopes.find((x) => x.id === s.id);
-    return before && before.percent < 100 && s.percent === 100 && s.tasksTotal;
-  }) : [];
+  const justFull = (msId) => {
+    const before = prev.summary.milestones.find((m) => m.id === msId);
+    const now = msSummary(msId);
+    return before && now ? now.scopes.filter((s) => {
+      const b = before.scopes.find((x) => x.id === s.id);
+      return b && b.percent < 100 && s.percent === 100 && s.tasksTotal;
+    }) : [];
+  };
+  const closedScopes = justFull(view);
   const closedMs = state.summary.milestones.filter((m) => {
     const before = prev.summary.milestones.find((x) => x.id === m.id);
     return before && !before.closed && m.closed;
   });
 
   const inView = closedTasks.filter((t) => t.milestone === view);
+  const inMain = closedTasks.filter((t) => t.milestone === state.activeMilestone);
   const moving = calm ? [] : inView.filter((t) => t.scope === sel).map((t) => t.id);
   moving.forEach((id) => { fresh.add(id); held.add(id); });
   closedScopes.forEach((s) => justClosed.add(s.id));
+  justFull(state.activeMilestone).forEach((s) => justSealed.add(s.id));
   const from = shown;
   render(true);
 
-  if (inView.length && from?.ms === view) {
-    const deltas = new Map([...new Set(inView.map((t) => t.scope))].map((id) => [id, scopeSummary(id).percent - (from.scopes[id]?.percent ?? 0)]));
-    tasksClosedFx(deltas, inView.length, from.total);
+  if (closedTasks.length && from) {
+    const deltas = from.view === view
+      ? new Map([...new Set(inView.map((t) => t.scope))].map((id) => [id, scopeSummary(id).percent - (from.scopes[id] ?? 0)]))
+      : new Map();
+    const mainScopes = from.main === state.activeMilestone ? [...new Set(inMain.map((t) => t.scope))] : [];
+    tasksClosedFx(deltas, mainScopes, closedTasks.length, from.main === state.activeMilestone ? from.total : null);
   }
   if (moving.length) setTimeout(() => flipTasks(moving), 750);
-  closedScopes.forEach((s) => { scopeClosedFx(s.id); toast(`Аспект «${s.name}» в рубеже закрыт полностью`); });
+  closedScopes.forEach((s) => { scopeClosedFx(s.id); toast(`Аспект «${s.name}» в волне закрыт полностью`); });
   closedMs.forEach((m) => setTimeout(() => finale(m.id), closedScopes.length ? 1600 : 900));
 }
 
@@ -301,7 +330,7 @@ function syncCloseBtn() {
 function askReopen(t) {
   pending = { id: t.id, mode: 'reopen' };
   $('dTitle').textContent = 'Вернуть задачу в работу?';
-  $('dBody').innerHTML = `<p>«${esc(t.title)}» снова станет открытой, и прогресс рубежа уменьшится. Отметки критериев сохранятся.</p>`;
+  $('dBody').innerHTML = `<p>«${esc(t.title)}» снова станет открытой, и прогресс волны уменьшится. Отметки критериев сохранятся.</p>`;
   $('dOk').textContent = 'Вернуть в работу';
   $('dOk').disabled = false;
   $('dlg').showModal();

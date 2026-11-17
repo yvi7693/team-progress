@@ -1,13 +1,16 @@
 :root {
-  --bg: #F3F4F8;
+  /* Палитра студии S.Games «Лазурь и сливки» (sgames-site/palette.css) */
+  --bg: #F7F9FC;
   --surface: #FFFFFF;
-  --ink: #171A2B;
-  --muted: #626781;
-  --faint: #9A9EB5;
-  --line: #E2E4EE;
-  --track: #E8EAF2;
-  --accent: #4A45D1;
+  --ink: #143250;
+  --muted: #5C6F84;
+  --faint: #93A5B9;
+  --line: #DFE6EE;
+  --track: #E3EBF3;
+  --accent: #156DA3;
+  --accent-hover: #1A7FBD;
   --accent-ink: #FFFFFF;
+  --cream: #FAF4E8;
   --display: "Unbounded", "Golos Text", system-ui, sans-serif;
   --body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
@@ -22,13 +25,23 @@ button { cursor: pointer; }
 /* Уровень 0: главная цель */
 .l0 { text-align: center; max-width: 680px; margin: 0 auto 28px; }
 .kicker { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+/* Шапка студии */
+.brand { display: block; width: max-content; margin: 0 auto 28px; transition: transform .2s; }
+.brand img { display: block; width: 56px; height: auto; }
+.brand:hover { transform: scale(1.06); }
 h1 { font-weight: 600; font-size: clamp(20px, 2.6vw, 26px); line-height: 1.25; margin: 0; }
-.metric { margin: 10px 0 0; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
-.metric b { color: var(--ink); font-weight: 600; }
-.metric:empty { display: none; }
+/* Счётчики под главным баром: крупная цифра, подпись, тонкий разделитель */
+.metric { margin: 22px 0 0; display: flex; justify-content: center; }
+.metric .stat { display: grid; justify-items: center; gap: 4px; padding: 0 28px; }
+.metric .stat + .stat { border-left: 1px solid var(--line); }
+.metric .stat b { display: grid; place-items: center; height: 26px; font-family: var(--display); font-size: 22px; font-weight: 600; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
+.metric .stat span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.metric .locked { cursor: default; }
+.metric .locked b, .metric .locked span { color: var(--faint); }
+.metric .locked svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 
-/* Лестница рубежей */
-.ladder { margin: 0 0 44px; }
+/* Волны */
+.ladder { margin: 0 0 28px; }
 .ladder ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: none; }
 .step { width: 100%; height: 100%; display: grid; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto auto auto; column-gap: 10px; row-gap: 2px; align-items: center; text-align: left; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
 .step:hover { border-color: var(--faint); }
@@ -43,10 +56,11 @@ h1 { font-weight: 600; font-size: clamp(20px, 2.6vw, 26px); line-height: 1.25; m
 .step.done .bar i { background: #1F9D55; }
 .step .spct { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 
-/* Уровень 1: рубеж */
-.l1 { text-align: center; max-width: 680px; margin: 0 auto 52px; }
+/* Уровень 1: активная волна */
+.l1 { text-align: center; max-width: 680px; margin: 0 auto 40px; }
 .mst { font-family: var(--display); font-weight: 600; font-size: clamp(18px, 2.4vw, 22px); line-height: 1.25; margin: 0; }
-.crit-line { font-size: 13px; color: var(--muted); margin: 8px auto 0; max-width: 560px; }
+.crit-line { font-size: 13px; color: var(--muted); margin: 6px 0 0; max-width: 680px; }
+.wavehead { margin: 0 0 16px; }
 .crit-line:empty { display: none; }
 .hero { font-family: var(--display); font-weight: 600; font-size: clamp(76px, 13vw, 128px); line-height: 1; letter-spacing: -.04em; margin: 18px 0 26px; }
 .hero small { font-size: .38em; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
@@ -56,6 +70,17 @@ h1 { font-weight: 600; font-size: clamp(20px, 2.6vw, 26px); line-height: 1.25; m
 .bar i { display: block; height: 100%; transition: width .6s cubic-bezier(.2, .7, .2, 1); }
 .bar.main i { flex: none; }
 .bar.main i + i { box-shadow: inset 2px 0 0 var(--bg); }
+
+/* Главный бар по волнам: зазор между отрезками — метка волны, номера под баром */
+.bar.waves { background: none; gap: 3px; overflow: visible; border-radius: 0; }
+.bar.waves .wv { position: relative; display: flex; min-width: 8px; height: 100%; background: var(--track); overflow: hidden; }
+.bar.waves .wv:first-child { border-radius: 99px 0 0 99px; }
+.bar.waves .wv:last-child { border-radius: 0 99px 99px 0; }
+.bar.waves .wv:not(.active):not(.done) i { opacity: .55; }
+.wavemarks { display: flex; gap: 3px; margin-top: 6px; font-size: 11px; line-height: 1; color: var(--faint); text-align: left; }
+.wavemarks span { min-width: 8px; }
+.wavemarks .active { color: var(--ink); font-weight: 600; }
+.wavemarks .done { color: var(--muted); }
 
 /* Уровень 2: цели по скоупам */
 h2 { font-size: 15px; font-weight: 600; margin: 0 0 14px; }
@@ -117,6 +142,7 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 14px; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-weight: 500; }
 .btn:hover { border-color: var(--faint); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .empty, .loading { color: var(--muted); font-size: 14px; padding: 8px 0; margin: 0; }
 .loading { text-align: center; padding: 24px 0; }
