@@ -27,13 +27,21 @@ test('Claude через MCP видит дашборд и меняет задач
   const client = await connect(`${base}/mcp`);
   try {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    assert.deepEqual(names, ['add_task', 'delete_task', 'get_dashboard', 'list_tasks', 'set_goal', 'set_task_done', 'update_task']);
+    assert.deepEqual(names, ['add_milestone', 'add_task', 'check_criterion', 'delete_task', 'get_dashboard', 'list_tasks', 'set_active_milestone', 'set_aim', 'set_goal', 'set_metric', 'set_task_done', 'update_milestone', 'update_task']);
 
-    const added = parse(await client.callTool({ name: 'add_task', arguments: { scope: 'design', title: 'Нарратив', weight: 2 } }));
+    const added = parse(await client.callTool({ name: 'add_task', arguments: { scope: 'design', title: 'Нарратив', weight: 2, criteria: ['Текст написан'] } }));
     assert.equal(added.scope, 'design');
-    await client.callTool({ name: 'set_task_done', arguments: { id: added.id, done: true } });
+    const early = await client.callTool({ name: 'set_task_done', arguments: { id: added.id, done: true, accepted_by: 'PO' } });
+    assert.equal(early.isError, true); // критерий не отмечен
+    await client.callTool({ name: 'check_criterion', arguments: { id: added.id, index: 0, done: true } });
+    const noWho = await client.callTool({ name: 'set_task_done', arguments: { id: added.id, done: true } });
+    assert.equal(noWho.isError, true); // не указано, кто принял
+    await client.callTool({ name: 'set_task_done', arguments: { id: added.id, done: true, accepted_by: 'PO' } });
     await client.callTool({ name: 'update_task', arguments: { id: added.id, title: 'Нарратив и диалоги' } });
     await client.callTool({ name: 'set_goal', arguments: { title: 'Вертикальный срез' } });
+    await client.callTool({ name: 'add_milestone', arguments: { id: 'page', title: 'Страница в Steam', date: '28.11' } });
+    await client.callTool({ name: 'set_aim', arguments: { milestone: 'page', scope: 'mkt', text: 'Страница опубликована' } });
+    await client.callTool({ name: 'set_metric', arguments: { value: 42 } });
 
     const dash = parse(await client.callTool({ name: 'get_dashboard', arguments: {} }));
     assert.equal(dash.goal.title, 'Вертикальный срез');
@@ -41,6 +49,10 @@ test('Claude через MCP видит дашборд и меняет задач
     assert.equal(t.title, 'Нарратив и диалоги');
     assert.equal(t.done, true);
     assert.ok(dash.summary.percent > 0);
+    assert.equal(t.acceptedBy, 'PO');
+    assert.equal(dash.milestones.length, 2);
+    assert.equal(dash.aims.page.mkt, 'Страница опубликована');
+    assert.equal(dash.goal.metric.value, 42);
 
     const bad = await client.callTool({ name: 'add_task', arguments: { scope: 'nope', title: 'x' } });
     assert.equal(bad.isError, true);
@@ -74,8 +86,10 @@ test('REST API для сайта', async () => {
   try {
     const state = await (await fetch(`${base}/api/state`)).json();
     const id = state.tasks[0].id;
-    const r = await fetch(`${base}/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true }) });
+    const r = await fetch(`${base}/api/tasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true, acceptedBy: 'PO' }) });
     assert.equal((await r.json()).done, true);
+    const noWho = await fetch(`${base}/api/tasks/${state.tasks[1].id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true }) });
+    assert.equal(noWho.status, 400);
     const bad = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'art', title: '' }) });
     assert.equal(bad.status, 400);
   } finally {

@@ -1,6 +1,6 @@
 {
   "name": "team-progress",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Командный прогресс-бар: главная цель, цели по скоупам и задачи. Живая синхронизация и MCP-сервер для Claude.",
   "main": "src/server.js",
   "scripts": {

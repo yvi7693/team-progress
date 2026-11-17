@@ -14,15 +14,26 @@
 </head>
 <body>
 <div class="wrap">
-  <header class="l1">
+  <header class="l0">
     <p class="kicker">Главная цель</p>
     <h1 id="goalTitle">&nbsp;</h1>
-    <div class="hero" id="hero">—</div>
-    <div class="bar main" id="mainbar" role="img" aria-label="Общий прогресс"></div>
+    <p class="metric" id="metric"></p>
   </header>
 
+  <nav class="ladder" aria-label="Рубежи на пути к цели">
+    <ol id="ladder"></ol>
+  </nav>
+
+  <section class="l1" aria-labelledby="msTitle">
+    <p class="kicker" id="msKicker"></p>
+    <h2 class="mst" id="msTitle">&nbsp;</h2>
+    <p class="crit-line" id="msCriterion"></p>
+    <div class="hero" id="hero">—</div>
+    <div class="bar main" id="mainbar" role="img" aria-label="Прогресс рубежа"></div>
+  </section>
+
   <section class="l2" aria-labelledby="l2h">
-    <h2 id="l2h">Цели по скоупам</h2>
+    <h2 id="l2h">Аспекты рубежа</h2>
     <div class="scopes" id="scopes"><p class="loading">Загружаем задачи…</p></div>
   </section>
 
@@ -31,14 +42,19 @@
       <h2 id="l3h">Задачи</h2>
       <button class="ghost" id="editBtn" type="button">Изменить список</button>
     </div>
+    <p class="aim" id="aim"></p>
     <div id="tasks"></div>
   </section>
 
   <details class="foot" id="goalPanel">
-    <summary>Изменить главную цель</summary>
+    <summary>Настройки цели</summary>
     <form class="goalform" id="goalForm">
-      <label for="gT">Название цели</label>
+      <label for="gT">Главная цель</label>
       <input id="gT" required maxlength="200">
+      <label for="gM" id="gMl">Показатель</label>
+      <input id="gM" type="number" min="0" step="1" inputmode="numeric">
+      <label for="gA">Активный рубеж</label>
+      <select id="gA"></select>
       <button class="btn" type="submit">Сохранить</button>
     </form>
   </details>
@@ -47,12 +63,14 @@
 <p class="offline" id="offline" hidden>Нет связи с сервером, переподключаемся…</p>
 
 <dialog id="dlg" aria-labelledby="dTitle">
-  <h3 id="dTitle"></h3>
-  <p id="dText"></p>
-  <div class="dact">
-    <button class="btn" id="dNo" type="button">Отмена</button>
-    <button class="btn primary" id="dOk" type="button"></button>
-  </div>
+  <form method="dialog" id="dForm">
+    <h3 id="dTitle"></h3>
+    <div id="dBody"></div>
+    <div class="dact">
+      <button class="btn" id="dNo" type="button">Отмена</button>
+      <button class="btn primary" id="dOk" type="submit"></button>
+    </div>
+  </form>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/app.js" type="module"></script>
