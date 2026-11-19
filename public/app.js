@@ -50,7 +50,6 @@ const msSummary = (id) => state.summary.milestones.find((m) => m.id === id);
 const viewSummary = () => msSummary(view);
 const mainSummary = () => msSummary(state.activeMilestone);
 const scopeSummary = (id) => viewSummary().scopes.find((s) => s.id === id);
-const openBlockers = (t) => state.summary.blockersOpen[t.id] || [];
 const tasksOf = (scopeId) => state.tasks
   .filter((t) => t.milestone === view && t.scope === scopeId)
   .sort((a, b) => (a.done && !held.has(a.id)) - (b.done && !held.has(b.id)) || a.createdAt - b.createdAt);
@@ -175,21 +174,16 @@ function renderTasks() {
   const cls = (t) => [t.done && 'done', fresh.has(t.id) && 'justdone', settling.has(t.id) && 'settle', open.has(t.id) && 'open'].filter(Boolean).join(' ');
   $('tasks').innerHTML =
     `<ul class="cl" style="--c:${scope?.color ?? 'var(--accent)'}">${list.map((t) => {
-      const doneN = t.criteria.filter((c) => c.done).length;
-      const waits = openBlockers(t);
-      const crit = t.criteria.length ? `<span class="cnt${doneN === t.criteria.length ? ' full' : ''}" title="Отмечено критериев">${doneN}/${t.criteria.length}</span>` : '';
-      const wait = !t.done && waits.length ? `<span class="wait" title="Ждёт закрытия других задач">ждёт ${waits.length}</span>` : '';
-      const details = open.has(t.id) ? `<div class="det">
-        ${t.criteria.length ? `<ul class="crits">${t.criteria.map((c, i) => `<li><label><input type="checkbox" data-crit="${esc(t.id)}" data-i="${i}" ${c.done ? 'checked' : ''} ${t.done ? 'disabled' : ''}><span>${esc(c.text)}</span></label></li>`).join('')}</ul>` : '<p class="note">Критериев нет.</p>'}
-        ${t.blockedBy.length ? `<p class="note"><b>Зависит от:</b> ${t.blockedBy.map((b) => { const x = taskById(b); return x ? `<span class="${x.done ? 'ok' : 'no'}">${esc(x.title)}</span>` : ''; }).join(', ')}</p>` : ''}
+      // Критерии и зависимости в интерфейсе не показываем; раскрыть можно только, кто принял.
+      const hasMore = t.done;
+      const details = hasMore && open.has(t.id) ? `<div class="det">
         ${t.done ? `<p class="note"><b>Принято:</b> ${esc(t.acceptedBy)}${t.doneAt ? `, ${fmtDate(t.doneAt)}` : ''}</p>` : ''}
       </div>` : '';
       return `<li class="${cls(t)}" data-task="${esc(t.id)}">
         <div class="row">
           <label><span class="ck"><input type="checkbox" data-id="${esc(t.id)}" ${t.done ? 'checked' : ''}><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M4.5 9.5l3.3 3.1 5.7-6.6"/></svg></span><span class="t">${esc(t.title)}</span></label>
-          ${wait}${crit}
           ${editMode ? `<span class="w" title="Вес задачи">вес ${t.weight}</span><button class="del" type="button" data-del="${esc(t.id)}" aria-label="Удалить задачу">×</button>` : ''}
-          <button class="more" type="button" data-more="${esc(t.id)}" aria-expanded="${open.has(t.id)}" aria-label="Критерии задачи">▾</button>
+          ${hasMore ? `<button class="more" type="button" data-more="${esc(t.id)}" aria-expanded="${open.has(t.id)}" aria-label="Подробности задачи">▾</button>` : ''}
         </div>${details}
       </li>`;
     }).join('')}</ul>` +
@@ -199,7 +193,6 @@ function renderTasks() {
         <input name="ttl" placeholder="Результат, например «Котики первой волны в финальном арте»" aria-label="Новая задача" maxlength="200">
         <select name="weight" aria-label="Вес задачи"><option value="1">вес 1</option><option value="2" selected>вес 2</option><option value="3">вес 3</option></select>
       </div>
-      <textarea name="crit" rows="3" placeholder="Критерии закрытия, по одному на строку" aria-label="Критерии закрытия"></textarea>
       <button class="btn" type="submit">Добавить задачу</button></form>` : '');
   fresh.clear();
   settling.clear();
@@ -303,27 +296,23 @@ function celebrate(prev) {
   closedMs.forEach((m) => setTimeout(() => finale(m.id), closedScopes.length ? 1600 : 900));
 }
 
-// Диалог закрытия: все критерии отмечены, зависимости закрыты, указано, кто принял.
+// Диалог закрытия: нужно только указать, кто принял. Критерии приёмки отмечаются при закрытии сами.
 function askClose(t) {
   pending = { id: t.id, mode: 'close' };
-  const waits = openBlockers(t).map(taskById).filter(Boolean);
   $('dTitle').textContent = 'Закрыть задачу?';
   $('dBody').innerHTML = `<p>«${esc(t.title)}» будет отмечена принятой для всей команды.</p>
-    ${t.criteria.length ? `<p class="dl">Подтвердите каждый критерий:</p><ul class="crits dcrits">${t.criteria.map((c, i) => `<li><label><input type="checkbox" name="c${i}" ${c.done ? 'checked' : ''}><span>${esc(c.text)}</span></label></li>`).join('')}</ul>` : ''}
-    ${waits.length ? `<p class="block">Закрыть пока нельзя. Сначала должны быть закрыты: ${waits.map((w) => `«${esc(w.title)}»`).join(', ')}.</p>` : ''}
     <label class="dl" for="dWho">Кто принял результат</label>
-    <input id="dWho" name="who" maxlength="80" autocomplete="name" value="${esc(lsGet('acceptedBy'))}" ${waits.length ? 'disabled' : ''}>`;
+    <input id="dWho" name="who" maxlength="80" autocomplete="name" value="${esc(lsGet('acceptedBy'))}">`;
   $('dOk').textContent = 'Задача принята';
   syncCloseBtn();
   $('dlg').showModal();
-  if (!waits.length) $('dWho').focus();
+  $('dWho').focus();
 }
 
 function syncCloseBtn() {
   if (pending?.mode !== 'close') return;
   const t = taskById(pending.id);
-  const boxes = [...$('dBody').querySelectorAll('.dcrits input')];
-  const ok = t && !openBlockers(t).length && boxes.every((b) => b.checked) && $('dWho')?.value.trim();
+  const ok = t && $('dWho')?.value.trim();
   $('dOk').disabled = !ok;
 }
 
@@ -346,7 +335,7 @@ $('dForm').addEventListener('submit', async (e) => {
   if (!t) { $('dlg').close(); return; }
   try {
     if (p.mode === 'close') {
-      const checks = [...$('dBody').querySelectorAll('.dcrits input')].map((b) => b.checked);
+      const checks = t.criteria.map(() => true); // сервер закрывает задачу только с отмеченными критериями
       const who = $('dWho').value.trim();
       await api('PATCH', `/api/tasks/${encodeURIComponent(t.id)}`, { ...(checks.length ? { checks } : {}), done: true, acceptedBy: who });
       lsSet('acceptedBy', who);
@@ -405,12 +394,6 @@ document.addEventListener('change', async (e) => {
     c.checked = !c.checked; // меняем только после подтверждения
     const t = taskById(c.dataset.id);
     if (t) (t.done ? askReopen : askClose)(t);
-    return;
-  }
-  if (c.matches('[data-crit]')) {
-    try {
-      await api('POST', `/api/tasks/${encodeURIComponent(c.dataset.crit)}/criteria/${c.dataset.i}`, { done: c.checked });
-    } catch (err) { c.checked = !c.checked; toast(err.message); }
   }
 });
 
@@ -420,9 +403,8 @@ document.addEventListener('submit', async (e) => {
     e.preventDefault();
     const title = f.ttl.value.trim();
     if (!title) { f.ttl.focus(); toast('Введите название задачи'); return; }
-    const criteria = f.crit.value.split('\n').map((s) => s.trim()).filter(Boolean);
     try {
-      await api('POST', '/api/tasks', { milestone: view, scope: sel, title, weight: Number(f.weight.value), criteria });
+      await api('POST', '/api/tasks', { milestone: view, scope: sel, title, weight: Number(f.weight.value) });
       f.reset();
       f.ttl.focus();
     } catch (err) { toast(err.message); }

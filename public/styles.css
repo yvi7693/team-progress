@@ -114,22 +114,12 @@ h2 { font-size: 15px; font-weight: 600; margin: 0 0 14px; }
 .cl .row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; margin: 0; }
 .cl .t { overflow-wrap: anywhere; }
 .cl .done .t { color: var(--faint); text-decoration: line-through; }
-.cnt, .wait { font-size: 12px; border-radius: 6px; padding: 1px 7px; flex: none; white-space: nowrap; }
-.cnt { color: var(--muted); background: var(--bg); font-variant-numeric: tabular-nums; }
-.cnt.full { color: #1F7A45; background: #E3F5EA; }
-.wait { color: #8A4A00; background: #FFF1DE; }
 .more { border: 0; background: none; color: var(--faint); width: 28px; height: 28px; border-radius: 8px; flex: none; transition: transform .2s, background .15s; }
 .more:hover { color: var(--ink); background: var(--bg); }
 .more[aria-expanded="true"] { transform: rotate(180deg); }
 .det { margin: 8px 0 2px 30px; }
-.crits { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.crits label { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; cursor: pointer; }
-.cl .crits input[type=checkbox], dialog .crits input[type=checkbox] { appearance: auto; -webkit-appearance: checkbox; width: 16px; height: 16px; margin: 2px 0 0; flex: none; border: 0; background: none; accent-color: var(--c, var(--accent)); }
-.crits input:disabled + span { color: var(--muted); }
 .note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .note b { color: var(--ink); font-weight: 500; }
-.note .ok { color: #1F7A45; }
-.note .no { color: #8A4A00; }
 .w { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; flex: none; }
 .del { border: 0; background: none; color: var(--faint); padding: 2px 6px; border-radius: 6px; font-size: 16px; line-height: 1; }
 .del:hover { color: var(--ink); background: var(--bg); }
@@ -162,10 +152,7 @@ dialog::backdrop { background: rgba(23, 26, 43, .35); }
 dialog h3 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
 dialog p { margin: 0 0 14px; color: var(--muted); }
 dialog .dl { display: block; font-size: 13px; color: var(--ink); font-weight: 500; margin: 0 0 8px; }
-dialog .dcrits { margin: 0 0 16px; }
-dialog .dcrits label { font-size: 14px; }
 dialog #dWho { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-bottom: 18px; }
-dialog .block { color: #8A4A00; background: #FFF1DE; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .dact { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .toast, .offline { position: fixed; left: 50%; transform: translateX(-50%); border-radius: 12px; font-weight: 500; max-width: 90vw; z-index: 20; }
 .toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 10px 16px; opacity: 0; pointer-events: none; transition: opacity .25s; }

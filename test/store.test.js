@@ -94,19 +94,19 @@ test('процент считается внутри рубежа, другие 
   assert.equal(sum.percent, 0); // активный рубеж не изменился
 });
 
-test('задача не закрывается без всех критериев, без закрытых зависимостей и без принявшего', async () => {
+test('задача не закрывается без всех критериев и без принявшего, зависимости закрытию не мешают', async () => {
   const store = await fresh();
   const base = await store.addTask({ scope: 'design', title: 'Документ', criteria: ['Описан'] });
   const t = await store.addTask({ scope: 'code', title: 'В билде', criteria: ['Работает', 'Проверено'], blockedBy: [base.id] });
   await assert.rejects(store.updateTask(t.id, { done: true, acceptedBy: 'PO' }), /Не отмечены критерии/);
   await store.checkCriterion(t.id, 0, true);
   await store.checkCriterion(t.id, 1, true);
-  await assert.rejects(store.updateTask(t.id, { done: true, acceptedBy: 'PO' }), /Сначала должны быть закрыты/);
-  await store.updateTask(base.id, { checks: [true], done: true, acceptedBy: 'PO' });
   await assert.rejects(store.updateTask(t.id, { done: true }), ValidationError);
   const closed = await store.updateTask(t.id, { done: true, acceptedBy: 'Дмитрий' });
   assert.equal(closed.acceptedBy, 'Дмитрий');
-  await assert.rejects(store.updateTask(base.id, { done: false }), /зависят закрытые/);
+  assert.equal(store.snapshot().tasks.find((x) => x.id === base.id).done, false);
+  await store.updateTask(base.id, { checks: [true], done: true, acceptedBy: 'PO' });
+  await store.updateTask(base.id, { done: false });
   await assert.rejects(store.checkCriterion(t.id, 0, false), ValidationError);
   await store.updateTask(t.id, { done: false });
   assert.equal(store.snapshot().tasks.find((x) => x.id === t.id).acceptedBy, null);
@@ -152,10 +152,8 @@ test('файл плана загружается и проверяется на 
   const store = await new Store(path.join(dir, 'db.json'), { seedFile: ok }).load();
   assert.equal(store.snapshot().summary.percent, 50);
 
-  plan.tasks[0].done = false;
   plan.tasks[0].acceptedBy = null;
-  plan.tasks[1] = { ...plan.tasks[1], done: true, acceptedBy: 'PO' };
   const bad = path.join(dir, 'bad.json');
   await writeFile(bad, JSON.stringify(plan));
-  await assert.rejects(loadSeedFile(bad), /закрыта раньше/);
+  await assert.rejects(loadSeedFile(bad), /не указано, кто принял/);
 });

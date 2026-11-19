@@ -253,10 +253,6 @@ export class Store extends EventEmitter {
     return ids;
   }
 
-  #dependents(id) {
-    return this.state.tasks.filter((t) => t.blockedBy.includes(id));
-  }
-
   // Записи идут строго по очереди, чтобы параллельные запросы не перетёрли файл.
   #commit(mutate) {
     const run = async () => {
@@ -306,8 +302,8 @@ export class Store extends EventEmitter {
     });
   }
 
-  // Меняет поля задачи. Закрытие (done: true) проходит три проверки:
-  // все критерии отмечены, все зависимости закрыты, указано, кто принял.
+  // Меняет поля задачи. Закрытие (done: true) проходит две проверки:
+  // все критерии отмечены и указано, кто принял. Зависимости закрытию не мешают.
   // checks — необязательный список отметок критериев, применяется до проверки.
   async updateTask(id, patch = {}) {
     const t = this.#find(id);
@@ -343,14 +339,10 @@ export class Store extends EventEmitter {
         const criteria = next.criteria ?? t.criteria;
         const open = criteria.filter((c) => !c.done);
         if (open.length) throw new ValidationError(`Не отмечены критерии: ${open.map((c) => `«${c.text}»`).join(', ')}`);
-        const blockers = (next.blockedBy ?? t.blockedBy).map((b) => this.#find(b)).filter((b) => !b.done);
-        if (blockers.length) throw new ValidationError(`Сначала должны быть закрыты: ${blockers.map((b) => `«${b.title}»`).join(', ')}`);
         next.acceptedBy = cleanText(patch.acceptedBy, 'Кто принял задачу', 80);
         next.done = true;
         next.doneAt = Date.now();
       } else {
-        const deps = this.#dependents(t.id).filter((d) => d.done);
-        if (deps.length) throw new ValidationError(`От этой задачи зависят закрытые: ${deps.map((d) => `«${d.title}»`).join(', ')}. Сначала верните их в работу`);
         next.done = false;
         next.doneAt = null;
         next.acceptedBy = null;
@@ -482,8 +474,6 @@ export async function loadSeedFile(file) {
     if (!s.scopes.some((sc) => sc.id === t.scope)) throw new Error(`В плане ${file} у задачи «${t.id}» неизвестный аспект «${t.scope}»`);
     if (t.done && t.criteria.some((c) => !c.done)) throw new Error(`В плане ${file} задача «${t.id}» закрыта, но не все её критерии отмечены`);
     if (t.done && !t.acceptedBy) throw new Error(`В плане ${file} у закрытой задачи «${t.id}» не указано, кто принял`);
-    const open = t.done && t.blockedBy.filter((b) => !s.tasks.find((x) => x.id === b).done);
-    if (open?.length) throw new Error(`В плане ${file} задача «${t.id}» закрыта раньше задач, от которых зависит: ${open.join(', ')}`);
   }
   return s;
 }
