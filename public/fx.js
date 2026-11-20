@@ -177,24 +177,24 @@ export function shades(hex) {
 }
 
 const CHECK = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10"/><path d="M5.8 10.4l2.8 2.7 5.6-6"/></svg>';
-export const closedBadge = `<span class="ok"><span class="okic">${CHECK}</span>Скоуп закрыт</span>`;
+export const closedBadge = `<span class="ok"><span class="okic">${CHECK}</span>Закрыт</span>`;
 
 // Финальный экран: бар собирается по скоупам, затем 100%, конфетти всех цветов и итог.
-export function showFinale({ title, tasksDone, scopesDone, scopesTotal, segments }) {
+export function showFinale({ kicker = 'Цель достигнута', title, tasksDone, scopesDone, scopesTotal, scopesLabel = 'скоупов', segments }) {
   document.querySelector('.finale')?.remove();
   const el = document.createElement('div');
   el.className = 'finale';
   el.setAttribute('role', 'dialog');
-  el.setAttribute('aria-label', 'Цель достигнута');
+  el.setAttribute('aria-label', kicker);
   const pre = calm ? 0 : 250 + segments.length * 260; // время сборки бара перед 100%
   el.innerHTML = `<div class="card">
-    <p class="kicker">Цель достигнута</p>
+    <p class="kicker">${kicker}</p>
     <h2>${title}</h2>
     <div class="big" style="animation-delay:${pre + 100}ms">100<small>%</small></div>
     <div class="bar main">${segments.map((s) => `<i style="width:${calm ? s.share : 0}%;background:${s.color}" data-w="${s.share}"></i>`).join('')}</div>
     <div class="stats">
       <div class="stat"><b>${tasksDone}</b><span>закрыто задач</span></div>
-      <div class="stat"><b>${scopesDone} из ${scopesTotal}</b><span>пройдено скоупов</span></div>
+      <div class="stat"><b>${scopesDone} из ${scopesTotal}</b><span>пройдено ${scopesLabel}</span></div>
     </div>
     <button type="button" class="btn primary">Продолжить</button>
   </div>`;

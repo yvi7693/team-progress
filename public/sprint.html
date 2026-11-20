@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Метрики спринтов</title>
+<link rel="icon" type="image/png" href="/brand/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/sprint.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="sptop" aria-label="Навигация">
+    <a class="back" href="/">← Дашборд</a>
+    <a class="brand small" href="https://yvi7693.github.io/sgames-site/" target="_blank" rel="noopener" aria-label="S.Games" title="S.Games">
+      <img src="/brand/s-games-logo.png" alt="" width="36" height="42">
+    </a>
+    <span class="kicker">Метрики спринтов</span>
+  </nav>
+  <main>
+    <div id="spTeam"><p class="loading">Загружаем спринт…</p></div>
+    <section class="smzone" id="smZone" aria-label="Метрики для scrum-мастера"></section>
+  </main>
+</div>
+<p class="offline" id="offline" hidden>Нет связи с сервером, переподключаемся…</p>
+<script src="/sprint.js" type="module"></script>
+</body>
+</html>

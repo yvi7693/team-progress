@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <title>Прогресс команды</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+<link rel="icon" type="image/png" href="/brand/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14,15 +14,30 @@
 </head>
 <body>
 <div class="wrap">
-  <header class="l1">
+  <a class="brand" href="https://yvi7693.github.io/sgames-site/" target="_blank" rel="noopener" aria-label="S.Games" title="S.Games">
+    <img src="/brand/s-games-logo.png" alt="" width="56" height="65">
+  </a>
+  <header class="l0">
     <p class="kicker">Главная цель</p>
     <h1 id="goalTitle">&nbsp;</h1>
-    <div class="hero" id="hero">—</div>
-    <div class="bar main" id="mainbar" role="img" aria-label="Общий прогресс"></div>
   </header>
 
-  <section class="l2" aria-labelledby="l2h">
-    <h2 id="l2h">Цели по скоупам</h2>
+  <section class="l1" aria-label="Прогресс активной волны">
+    <div class="hero" id="hero">—</div>
+    <div class="bar main waves" id="mainbar" role="img" aria-label="Прогресс волны"></div>
+    <div class="wavemarks" id="wavemarks" aria-hidden="true"></div>
+    <p class="metric" id="metric"></p>
+  </section>
+
+  <nav class="ladder" aria-label="Волны на пути к цели">
+    <ol id="ladder"></ol>
+  </nav>
+
+  <section class="l2" aria-labelledby="msTitle">
+    <div class="wavehead">
+      <h2 class="mst" id="msTitle">&nbsp;</h2>
+      <p class="crit-line" id="msCriterion"></p>
+    </div>
     <div class="scopes" id="scopes"><p class="loading">Загружаем задачи…</p></div>
   </section>
 
@@ -31,28 +46,36 @@
       <h2 id="l3h">Задачи</h2>
       <button class="ghost" id="editBtn" type="button">Изменить список</button>
     </div>
+    <p class="aim" id="aim"></p>
     <div id="tasks"></div>
   </section>
 
   <details class="foot" id="goalPanel">
-    <summary>Изменить главную цель</summary>
+    <summary>Настройки цели</summary>
     <form class="goalform" id="goalForm">
-      <label for="gT">Название цели</label>
+      <label for="gT">Главная цель</label>
       <input id="gT" required maxlength="200">
+      <label for="gM" id="gMl">Показатель</label>
+      <input id="gM" type="number" min="0" step="1" inputmode="numeric">
+      <label for="gA">Активная волна</label>
+      <select id="gA"></select>
       <button class="btn" type="submit">Сохранить</button>
     </form>
   </details>
 </div>
 
+
 <p class="offline" id="offline" hidden>Нет связи с сервером, переподключаемся…</p>
 
 <dialog id="dlg" aria-labelledby="dTitle">
-  <h3 id="dTitle"></h3>
-  <p id="dText"></p>
-  <div class="dact">
-    <button class="btn" id="dNo" type="button">Отмена</button>
-    <button class="btn primary" id="dOk" type="button"></button>
-  </div>
+  <form method="dialog" id="dForm">
+    <h3 id="dTitle"></h3>
+    <div id="dBody"></div>
+    <div class="dact">
+      <button class="btn" id="dNo" type="button">Отмена</button>
+      <button class="btn primary" id="dOk" type="submit"></button>
+    </div>
+  </form>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/app.js" type="module"></script>

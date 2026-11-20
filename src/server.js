@@ -46,7 +46,8 @@ export function createApp(store, { basicAuth, mcpSecret } = {}) {
     });
   }
 
-  app.use(express.static(path.join(root, 'public')));
+  // extensions: страница метрик открывается по адресу /sprint (public/sprint.html).
+  app.use(express.static(path.join(root, 'public'), { extensions: ['html'] }));
 
   const api = express.Router();
   const wrap = (fn) => async (req, res) => {
@@ -61,10 +62,27 @@ export function createApp(store, { basicAuth, mcpSecret } = {}) {
   };
 
   api.get('/state', wrap(async () => store.snapshot()));
+  // Подробные метрики спринтов: общий /api/state их не содержит, чтобы не гонять
+  // карточки всех спринтов по SSE; сайт запрашивает их, когда открыто окно метрик.
+  api.get('/sprints/full', wrap(async () => store.sprintsFull()));
+  api.put('/sprints/:id', wrap(async (req) => store.upsertSprint({ ...(req.body || {}), id: req.params.id })));
+  api.delete('/sprints/:id', wrap(async (req) => store.deleteSprint(req.params.id)));
+  api.put('/active-sprint', wrap(async (req) => store.setActiveSprint(req.body?.id)));
+  api.patch('/sprints/:id/criteria/:index', wrap(async (req) => store.setSprintCriterion(req.params.id, req.params.index, req.body || {})));
+  api.post('/sprints/:id/cards', wrap(async (req) => store.addCard(req.params.id, req.body || {})));
+  api.patch('/sprints/:id/cards/:card', wrap(async (req) => store.updateCard(req.params.id, req.params.card, req.body || {})));
+  api.delete('/sprints/:id/cards/:card', wrap(async (req) => store.deleteCard(req.params.id, req.params.card)));
   api.post('/tasks', wrap(async (req) => store.addTask(req.body || {})));
   api.patch('/tasks/:id', wrap(async (req) => store.updateTask(req.params.id, req.body || {})));
   api.delete('/tasks/:id', wrap(async (req) => store.deleteTask(req.params.id)));
+  api.post('/tasks/:id/criteria/:index', wrap(async (req) => store.checkCriterion(req.params.id, req.params.index, Boolean(req.body?.done))));
   api.put('/goal', wrap(async (req) => store.setGoal(req.body || {})));
+  api.put('/metric', wrap(async (req) => store.setMetric(req.body || {})));
+  api.post('/milestones', wrap(async (req) => store.addMilestone(req.body || {})));
+  api.patch('/milestones/:id', wrap(async (req) => store.updateMilestone(req.params.id, req.body || {})));
+  api.delete('/milestones/:id', wrap(async (req) => store.deleteMilestone(req.params.id)));
+  api.put('/active-milestone', wrap(async (req) => store.setActiveMilestone(req.body?.id)));
+  api.put('/aims/:milestone/:scope', wrap(async (req) => store.setAim(req.params.milestone, req.params.scope, req.body?.text)));
 
   // Server-Sent Events: каждое изменение (с сайта или от Claude) сразу прилетает всем открытым вкладкам.
   api.get('/events', (req, res) => {
@@ -85,7 +103,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3000);
   const host = process.env.HOST || '127.0.0.1';
   const dataFile = path.resolve(process.env.DATA_FILE || path.join(root, 'data', 'db.json'));
-  const store = await new Store(dataFile).load();
+  const seedFile = process.env.SEED_FILE ? path.resolve(process.env.SEED_FILE) : undefined;
+  const store = await new Store(dataFile, { seedFile }).load();
   store.setMaxListeners(0);
   const app = createApp(store, { basicAuth: process.env.BASIC_AUTH, mcpSecret: process.env.MCP_SECRET });
   app.listen(port, host, () => {
