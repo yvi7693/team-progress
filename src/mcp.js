@@ -51,7 +51,7 @@ export function buildMcpServer(store) {
       milestone: z.string().optional().describe('id рубежа'),
       weight: weight.optional(),
       criteria: criteria.optional(),
-      blocked_by: z.array(z.string()).optional().describe('id задач, которые должны быть закрыты раньше этой'),
+      blocked_by: z.array(z.string()).optional().describe('id задач, от которых зависит эта (справочно: закрыть и вернуть в работу задачу они не мешают)'),
     },
   }, safe(async ({ scope, title, milestone, weight: w, criteria: c, blocked_by: b }) =>
     json(await store.addTask({ scope, title, milestone, weight: w ?? 2, criteria: c, blockedBy: b ?? [] }))));
