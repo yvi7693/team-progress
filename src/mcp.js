@@ -1,7 +1,9 @@
 // MCP-сервер: инструменты, через которые Claude читает и меняет дашборд.
 // Иерархия: главная цель → рубежи → аспекты → задачи с критериями.
+// Отдельно — спринты: карточки, цели спринтов и scrum-метрики из них.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { KINDS, RESULTS, GOAL_STATUSES, CRITERION_STATUSES } from './sprints.js';
 
 const json = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 
@@ -25,7 +27,7 @@ export function buildMcpServer(store) {
 
   server.registerTool('get_dashboard', {
     title: 'Состояние дашборда',
-    description: 'Главная цель с показателем, рубежи с процентами, аспекты активного рубежа, фразы аспектов и все задачи с критериями и зависимостями. Вызывай первым, чтобы узнать id.',
+    description: 'Главная цель с показателем, рубежи с процентами, аспекты активного рубежа, фразы аспектов и все задачи с критериями и зависимостями. Вызывай первым, чтобы узнать id. Спринты и scrum-метрики — в get_sprint_metrics.',
     annotations: { readOnlyHint: true },
   }, safe(async () => {
     const s = snap();
@@ -80,11 +82,11 @@ export function buildMcpServer(store) {
 
   server.registerTool('set_task_done', {
     title: 'Закрыть или открыть задачу',
-    description: 'Закрывает задачу (done: true) или возвращает в работу (done: false). Закрытие проходит, только если отмечены все критерии и передан accepted_by — кто принял результат. Перед закрытием спроси пользователя, кто принял задачу; не подставляй имя сам.',
+    description: 'Закрывает задачу (done: true) или возвращает в работу (done: false). Закрытие проходит, только если отмечены все критерии. accepted_by — необязательная пометка, кто принял результат; передавай, только если пользователь сам назвал имя.',
     inputSchema: {
       id: z.string(),
       done: z.boolean(),
-      accepted_by: z.string().min(1).max(80).optional().describe('Кто принял результат, обязательно при done: true'),
+      accepted_by: z.string().min(1).max(80).optional().describe('Кто принял результат, необязательно'),
     },
     annotations: { idempotentHint: true },
   }, safe(async ({ id, done, accepted_by: a }) => json(await store.updateTask(id, { done, acceptedBy: a }))));
@@ -150,6 +152,101 @@ export function buildMcpServer(store) {
     inputSchema: { milestone: z.string(), scope: z.string(), text: z.string().max(200) },
     annotations: { idempotentHint: true },
   }, safe(async ({ milestone, scope, text }) => json(await store.setAim(milestone, scope, text))));
+
+  // ── Спринты и scrum-метрики ────────────────────────────────────────────
+  // Метрики сервер пересчитывает сам из карточек при каждом запросе: Claude вносит
+  // факты (карточки, цель, статусы), а числа берёт из get_sprint_metrics.
+  const sprintHint = () => snap().sprintsTeam.history.map((s) => s.id).join(', ') || 'пока нет';
+  const card = {
+    title: z.string().min(1).max(300).describe('Название карточки как на доске, с типом и оценкой: «[DESIGN] Вижн игры (3/1)»'),
+    kind: z.enum(KINDS).optional().describe('План — была на доске в конце дня планирования; Добор — вошла позже; Уточнение — PO отрезал от уже взятой (не добор). По умолчанию План'),
+    sp: z.number().min(0).max(100).nullable().optional().describe('Story points. Не передан — берётся из скобок в названии по правилу оценок; null — без оценки'),
+    result: z.enum(RESULTS).optional().describe('Чем карточка кончилась в этом спринте. По умолчанию «В работе»'),
+    add_day: z.number().int().min(1).max(10).optional().describe('Для добора: рабочий день спринта (1–10), когда карточку добрали'),
+    streak: z.number().int().min(1).max(50).optional().describe('Какой спринт подряд карточка в работе (1 — впервые). Нужен для оценки из названия'),
+    type: z.string().max(40).optional().describe('SPIKE, DESIGN, ENABLER, ASSET, CHORE… По умолчанию из [ТЕГА] в названии'),
+    added_at: z.string().max(40).optional().describe('Когда карточку добавили в спринт, ISO-дата и время'),
+    note: z.string().max(300).optional(),
+  };
+  const cardIn = ({ add_day: addDay, added_at: addedAt, ...c }) => ({ ...c, ...(addDay !== undefined ? { addDay } : {}), ...(addedAt !== undefined ? { addedAt } : {}) });
+  const criterion = z.object({
+    block: z.string().max(60).optional().describe('Блок цели: «Мир», «Кекс», «Проверка»'),
+    text: z.string().min(1).max(300).describe('Проверяемый факт'),
+    board: z.string().max(400).optional().describe('Что на доске по этому критерию'),
+    status: z.enum(CRITERION_STATUSES).optional(),
+  });
+
+  server.registerTool('get_sprint_metrics', {
+    title: 'Метрики спринтов',
+    description: 'Полный отчёт scrum-мастера: метрики каждого спринта (Velocity, Throughput, Say/Do, Scope Change, первый добор, Carry-over и исходные суммы), Sprint Goal Success Rate, сравнение активного спринта со средним по прошлым, цели и критерии, правила расчёта (method). С параметром sprint возвращает этот спринт с карточками и их id.',
+    inputSchema: { sprint: z.string().optional().describe(`id спринта. Есть: ${sprintHint()}`) },
+    annotations: { readOnlyHint: true },
+  }, safe(async ({ sprint }) => {
+    const full = store.sprintsFull();
+    if (!sprint) return json({ ...full, sprints: full.sprints.map(({ cards, ...s }) => ({ ...s, cardsCount: cards.length })) });
+    const one = full.sprints.find((s) => s.id === sprint);
+    if (!one) throw new Error(`Спринт ${sprint} не найден. Есть: ${sprintHint()}`);
+    return json({ sprint: one, method: full.method });
+  }));
+
+  server.registerTool('upsert_sprint', {
+    title: 'Создать или изменить спринт',
+    description: 'Создаёт спринт (нужны id, start, end) или меняет переданные поля существующего: цель, отметку «цель достигнута», основание, критерии цели. cards, если переданы, ЦЕЛИКОМ заменяют карточки спринта — так переносят спринт из таблицы одним вызовом; для правки одной карточки есть add/update/delete_sprint_card. Отметку цели ставь только по решению команды на обзоре спринта.',
+    inputSchema: {
+      id: z.string().describe('Короткий id: S9'),
+      start: z.string().optional().describe('Понедельник начала, ГГГГ-ММ-ДД'),
+      end: z.string().optional().describe('Пятница конца, ГГГГ-ММ-ДД'),
+      goal: z.string().max(600).optional().describe('Цель спринта: какой результат и зачем'),
+      goal_status: z.enum(GOAL_STATUSES).optional().describe('Цель достигнута: Да / Частично / Нет; «В процессе» — спринт идёт'),
+      goal_basis: z.string().max(600).optional().describe('Основание оценки цели: из отчёта или обзора спринта'),
+      criteria: z.array(criterion).max(20).optional().describe('Критерии приемки цели; заменяют прежние'),
+      cards: z.array(z.object(card)).max(300).optional(),
+      make_active: z.boolean().optional().describe('Сделать спринт текущим (его цель видит команда)'),
+    },
+  }, safe(async ({ goal_status: goalStatus, goal_basis: goalBasis, make_active: makeActive, cards, ...rest }) => json(await store.upsertSprint({
+    ...rest, goalStatus, goalBasis, makeActive, cards: cards?.map(cardIn),
+  }))));
+
+  server.registerTool('set_active_sprint', {
+    title: 'Сделать спринт текущим',
+    description: 'Текущий спринт показывается команде: его цель и критерии, а метрики сравниваются со средним по предыдущим спринтам.',
+    inputSchema: { id: z.string() },
+    annotations: { idempotentHint: true },
+  }, safe(async ({ id }) => json(await store.setActiveSprint(id))));
+
+  server.registerTool('set_sprint_criterion', {
+    title: 'Статус критерия цели спринта',
+    description: `Меняет статус (${CRITERION_STATUSES.join(', ')}) и/или «что на доске» у одного критерия цели спринта; index с нуля.`,
+    inputSchema: { sprint: z.string(), index: z.number().int().min(0), status: z.enum(CRITERION_STATUSES).optional(), board: z.string().max(400).optional() },
+    annotations: { idempotentHint: true },
+  }, safe(async ({ sprint, index, status, board }) => json(await store.setSprintCriterion(sprint, index, { status, board }))));
+
+  server.registerTool('add_sprint_card', {
+    title: 'Добавить карточку в спринт',
+    description: 'Добавляет карточку доски в спринт. Метрики спринта пересчитаются сами.',
+    inputSchema: { sprint: z.string(), ...card },
+  }, safe(async ({ sprint, ...c }) => json(await store.addCard(sprint, cardIn(c)))));
+
+  server.registerTool('update_sprint_card', {
+    title: 'Изменить карточку спринта',
+    description: 'Меняет поля карточки (результат, вид, SP, день добора…). id карточки — из get_sprint_metrics с параметром sprint.',
+    inputSchema: { sprint: z.string(), card: z.string().describe('id карточки, например c4'), ...Object.fromEntries(Object.entries(card).map(([k, v]) => [k, v.optional()])) },
+    annotations: { idempotentHint: true },
+  }, safe(async ({ sprint, card: id, ...c }) => json(await store.updateCard(sprint, id, cardIn(c)))));
+
+  server.registerTool('delete_sprint_card', {
+    title: 'Удалить карточку спринта',
+    description: 'Удаляет карточку из спринта. Перед вызовом уточни у пользователя.',
+    inputSchema: { sprint: z.string(), card: z.string() },
+    annotations: { destructiveHint: true },
+  }, safe(async ({ sprint, card: id }) => json({ deleted: await store.deleteCard(sprint, id) })));
+
+  server.registerTool('delete_sprint', {
+    title: 'Удалить спринт',
+    description: 'Безвозвратно удаляет спринт со всеми карточками и целью. Перед вызовом уточни у пользователя.',
+    inputSchema: { id: z.string() },
+    annotations: { destructiveHint: true },
+  }, safe(async ({ id }) => json(await store.deleteSprint(id))));
 
   return server;
 }

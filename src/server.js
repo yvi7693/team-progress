@@ -46,7 +46,8 @@ export function createApp(store, { basicAuth, mcpSecret } = {}) {
     });
   }
 
-  app.use(express.static(path.join(root, 'public')));
+  // extensions: страница метрик открывается по адресу /sprint (public/sprint.html).
+  app.use(express.static(path.join(root, 'public'), { extensions: ['html'] }));
 
   const api = express.Router();
   const wrap = (fn) => async (req, res) => {
@@ -61,6 +62,16 @@ export function createApp(store, { basicAuth, mcpSecret } = {}) {
   };
 
   api.get('/state', wrap(async () => store.snapshot()));
+  // Подробные метрики спринтов: общий /api/state их не содержит, чтобы не гонять
+  // карточки всех спринтов по SSE; сайт запрашивает их, когда открыто окно метрик.
+  api.get('/sprints/full', wrap(async () => store.sprintsFull()));
+  api.put('/sprints/:id', wrap(async (req) => store.upsertSprint({ ...(req.body || {}), id: req.params.id })));
+  api.delete('/sprints/:id', wrap(async (req) => store.deleteSprint(req.params.id)));
+  api.put('/active-sprint', wrap(async (req) => store.setActiveSprint(req.body?.id)));
+  api.patch('/sprints/:id/criteria/:index', wrap(async (req) => store.setSprintCriterion(req.params.id, req.params.index, req.body || {})));
+  api.post('/sprints/:id/cards', wrap(async (req) => store.addCard(req.params.id, req.body || {})));
+  api.patch('/sprints/:id/cards/:card', wrap(async (req) => store.updateCard(req.params.id, req.params.card, req.body || {})));
+  api.delete('/sprints/:id/cards/:card', wrap(async (req) => store.deleteCard(req.params.id, req.params.card)));
   api.post('/tasks', wrap(async (req) => store.addTask(req.body || {})));
   api.patch('/tasks/:id', wrap(async (req) => store.updateTask(req.params.id, req.body || {})));
   api.delete('/tasks/:id', wrap(async (req) => store.deleteTask(req.params.id)));

@@ -3,12 +3,14 @@
 // всегда видят одно и то же состояние.
 //
 // Иерархия: главная цель → рубежи (подцели) → аспекты (скоупы) → задачи.
-// Задача закрывается, только когда отмечены все её критерии и указано, кто
-// принял результат. Зависимости (blockedBy) справочные и закрытию не мешают.
+// Задача закрывается, только когда отмечены все её критерии. Кто принял результат —
+// необязательная пометка. Зависимости (blockedBy) справочные и закрытию не мешают.
 import { EventEmitter } from 'node:events';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { ValidationError, NotFoundError } from './errors.js';
+import { normalizeSprints, sprintFields, cleanCard, cleanCriterion, cleanSprintId, sprintReport, CRITERION_STATUSES } from './sprints.js';
 
 export const SCHEMA_VERSION = 2;
 
@@ -33,8 +35,7 @@ const SEED_TASKS = [
   ['mkt', 'Трейлер демо', 3], ['mkt', 'Пресс-кит', 1], ['mkt', 'Регистрация на Next Fest', 1],
 ];
 
-export class ValidationError extends Error {}
-export class NotFoundError extends Error {}
+export { ValidationError, NotFoundError };
 
 const MAX_CRITERIA = 12;
 
@@ -83,6 +84,8 @@ export function seedState() {
     milestones: [{ id: 'demo', title: 'Демо к Steam Next Fest', criterion: '', date: '' }],
     activeMilestone: 'demo',
     aims: {},
+    sprints: [],
+    activeSprint: null,
     scopes: DEFAULT_SCOPES.map((s) => ({ ...s })),
     tasks: SEED_TASKS.map(([scope, title, weight], i) => ({
       id: randomUUID(), milestone: 'demo', scope, title, weight, criteria: [], blockedBy: [],
@@ -122,8 +125,15 @@ export function normalize(raw) {
     createdAt: t.createdAt || now + i,
     updatedAt: t.updatedAt || now + i,
   }));
-  const taskIds = new Set(s.tasks.map((t) => t.id));
+  // Повтор id ломает всё, что ищет задачу по id: закрывалась бы и правилась
+  // только первая, а удаление стирало бы обе. Поэтому такой файл не принимаем.
+  const taskIds = new Set();
+  const dups = new Set();
+  for (const t of s.tasks) (taskIds.has(t.id) ? dups : taskIds).add(t.id);
+  if (dups.size) throw new Error(`id задач повторяются: ${[...dups].join(', ')}`);
   s.tasks.forEach((t) => { t.blockedBy = t.blockedBy.filter((id) => taskIds.has(id) && id !== t.id); });
+  s.sprints = normalizeSprints(s.sprints);
+  if (!s.sprints.some((x) => x.id === s.activeSprint)) s.activeSprint = s.sprints.at(-1)?.id ?? null;
   s.version = SCHEMA_VERSION;
   return s;
 }
@@ -202,9 +212,15 @@ export class Store extends EventEmitter {
     return this;
   }
 
+  // Общее состояние для сайта, SSE и get_dashboard. Карточки спринтов и подробные
+  // метрики сюда не входят: их видит только scrum-мастер (sprintsFull) и Claude.
   snapshot() {
-    const s = structuredClone(this.state);
-    return { ...s, summary: summarize(s) };
+    const { sprints, ...s } = structuredClone(this.state);
+    return { ...s, summary: summarize(s), sprintsTeam: sprintReport(sprints, s.activeSprint).team };
+  }
+
+  sprintsFull(today) {
+    return sprintReport(structuredClone(this.state.sprints || []), this.state.activeSprint, today).full;
   }
 
   #assertScope(id) {
@@ -223,6 +239,18 @@ export class Store extends EventEmitter {
     const t = this.state.tasks.find((x) => x.id === id);
     if (!t) throw new NotFoundError(`Задача ${id} не найдена`);
     return t;
+  }
+
+  #findSprint(id) {
+    const sp = this.state.sprints.find((x) => x.id === id);
+    if (!sp) throw new NotFoundError(`Спринт ${id} не найден. Есть: ${this.state.sprints.map((x) => x.id).join(', ') || 'ни одного'}`);
+    return sp;
+  }
+
+  #findCard(sprint, cardId) {
+    const c = sprint.cards.find((x) => x.id === cardId);
+    if (!c) throw new NotFoundError(`В спринте ${sprint.id} нет карточки ${cardId}`);
+    return c;
   }
 
   #findMilestone(id) {
@@ -303,7 +331,7 @@ export class Store extends EventEmitter {
   }
 
   // Меняет поля задачи. Закрытие (done: true) проходит две проверки:
-  // все критерии отмечены и указано, кто принял. Зависимости закрытию не мешают.
+  // все критерии отмечены. acceptedBy (кто принял) — необязательная пометка. Зависимости закрытию не мешают.
   // checks — необязательный список отметок критериев, применяется до проверки.
   async updateTask(id, patch = {}) {
     const t = this.#find(id);
@@ -339,7 +367,7 @@ export class Store extends EventEmitter {
         const criteria = next.criteria ?? t.criteria;
         const open = criteria.filter((c) => !c.done);
         if (open.length) throw new ValidationError(`Не отмечены критерии: ${open.map((c) => `«${c.text}»`).join(', ')}`);
-        next.acceptedBy = cleanText(patch.acceptedBy, 'Кто принял задачу', 80);
+        next.acceptedBy = patch.acceptedBy ? cleanText(patch.acceptedBy, 'Кто принял задачу', 80) : null;
         next.done = true;
         next.doneAt = Date.now();
       } else {
@@ -459,6 +487,98 @@ export class Store extends EventEmitter {
       return { milestone, scope, aim: clean };
     });
   }
+
+  // ── Спринты ──────────────────────────────────────────────────────────────
+  // Создаёт спринт или меняет переданные поля существующего. cards, если переданы,
+  // целиком заменяют карточки спринта (так удобно переносить спринт из таблицы).
+  async upsertSprint({ id, cards, makeActive, ...patch } = {}) {
+    const sid = cleanSprintId(id);
+    const existing = this.state.sprints.find((x) => x.id === sid);
+    const fields = sprintFields(patch);
+    const merged = { ...(existing || {}), ...fields };
+    if (merged.start && merged.end && merged.end < merged.start) throw new ValidationError('Конец спринта раньше начала');
+    let nextCards;
+    if (cards !== undefined) {
+      if (!Array.isArray(cards) || cards.length > 300) throw new ValidationError('Карточки — список, не больше 300');
+      const now = Date.now();
+      nextCards = cards.map((c, i) => cleanCard(c, { id: `c${i + 1}`, now }));
+    }
+    if (!existing && !fields.start) throw new ValidationError('У нового спринта нужны даты start и end (ГГГГ-ММ-ДД)');
+    if (!existing && !fields.end) throw new ValidationError('У нового спринта нужна дата end (ГГГГ-ММ-ДД)');
+    return this.#commit(() => {
+      let sp = existing;
+      if (!sp) {
+        sp = { id: sid, start: '', end: '', goal: '', goalStatus: '', goalBasis: '', criteria: [], cards: [] };
+        this.state.sprints.push(sp);
+      }
+      Object.assign(sp, fields);
+      if (nextCards) sp.cards = nextCards;
+      this.state.sprints.sort((a, b) => (a.start || '').localeCompare(b.start || '') || a.id.localeCompare(b.id, 'ru', { numeric: true }));
+      if (makeActive || !this.state.activeSprint) this.state.activeSprint = sid;
+      return structuredClone(sp);
+    });
+  }
+
+  async deleteSprint(id) {
+    this.#findSprint(id);
+    return this.#commit(() => {
+      this.state.sprints = this.state.sprints.filter((x) => x.id !== id);
+      if (this.state.activeSprint === id) this.state.activeSprint = this.state.sprints.at(-1)?.id ?? null;
+      return { deleted: id };
+    });
+  }
+
+  async setActiveSprint(id) {
+    this.#findSprint(id);
+    return this.#commit(() => {
+      this.state.activeSprint = id;
+      return { activeSprint: id };
+    });
+  }
+
+  // Меняет статус и/или «что на доске» у одного критерия цели спринта (index с нуля).
+  async setSprintCriterion(id, index, { status, board } = {}) {
+    const sp = this.#findSprint(id);
+    const i = Number(index);
+    if (!Number.isInteger(i) || i < 0 || i >= sp.criteria.length) throw new ValidationError(`У цели спринта ${id} нет критерия №${index} (всего ${sp.criteria.length})`);
+    const next = cleanCriterion({ ...sp.criteria[i], ...(status !== undefined ? { status } : {}), ...(board !== undefined ? { board } : {}) });
+    if (status === undefined && board === undefined) throw new ValidationError(`Нечего менять: передайте status (${CRITERION_STATUSES.join(', ')}) или board`);
+    return this.#commit(() => {
+      sp.criteria[i] = next;
+      return structuredClone(next);
+    });
+  }
+
+  async addCard(sprintId, card) {
+    const sp = this.#findSprint(sprintId);
+    const n = Math.max(0, ...sp.cards.map((c) => Number(String(c.id).replace(/^c/, '')) || 0)) + 1;
+    const clean = cleanCard(card, { id: `c${n}` });
+    return this.#commit(() => {
+      sp.cards.push(clean);
+      return structuredClone(clean);
+    });
+  }
+
+  async updateCard(sprintId, cardId, patch = {}) {
+    const sp = this.#findSprint(sprintId);
+    const c = this.#findCard(sp, cardId);
+    const keys = ['title', 'type', 'kind', 'sp', 'result', 'addDay', 'addedAt', 'streak', 'note'].filter((k) => patch[k] !== undefined);
+    if (!keys.length) throw new ValidationError('Нечего менять: передайте title, type, kind, sp, result, addDay, addedAt, streak или note');
+    const clean = cleanCard({ ...c, ...Object.fromEntries(keys.map((k) => [k, patch[k]])) }, { id: c.id });
+    return this.#commit(() => {
+      Object.assign(c, clean);
+      return structuredClone(c);
+    });
+  }
+
+  async deleteCard(sprintId, cardId) {
+    const sp = this.#findSprint(sprintId);
+    const c = this.#findCard(sp, cardId);
+    return this.#commit(() => {
+      sp.cards = sp.cards.filter((x) => x.id !== cardId);
+      return structuredClone(c);
+    });
+  }
 }
 
 // Файл начального плана: та же схема, что и db.json. id задач и рубежей сохраняются,
@@ -473,7 +593,6 @@ export async function loadSeedFile(file) {
   for (const t of s.tasks) {
     if (!s.scopes.some((sc) => sc.id === t.scope)) throw new Error(`В плане ${file} у задачи «${t.id}» неизвестный аспект «${t.scope}»`);
     if (t.done && t.criteria.some((c) => !c.done)) throw new Error(`В плане ${file} задача «${t.id}» закрыта, но не все её критерии отмечены`);
-    if (t.done && !t.acceptedBy) throw new Error(`В плане ${file} у закрытой задачи «${t.id}» не указано, кто принял`);
   }
   return s;
 }

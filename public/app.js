@@ -1,6 +1,8 @@
 // Клиент дашборда: главная цель → прогресс активной волны → волны → аспекты выбранной волны → задачи.
+// Виджет спринта — sprint-widget.js, страница метрик спринтов — sprint.html и sprint.js.
 // Получает обновления от сервера в реальном времени.
 import { calm, countUp, floatPlus, wave, streakHit, milestone, scopeConfetti, shades, closedBadge, showFinale, play, vibrate, initSoundToggle } from './fx.js';
+import { sprintStatHtml } from './sprint-widget.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -10,7 +12,7 @@ let state = null;
 let view = null;        // волна, аспекты которой сейчас смотрят (по умолчанию активная)
 let sel = null;         // выбранный аспект
 let editMode = false;
-let pending = null;     // { id, mode: 'close' | 'reopen' }
+let pending = null;     // { id, mode: 'reopen' } — задача в диалоге возврата в работу
 const open = new Set(); // задачи с раскрытыми критериями
 
 // Для анимаций: последние показанные числа и одноразовые отметки «только что».
@@ -40,8 +42,6 @@ async function api(method, url, body) {
   return data;
 }
 
-const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 
 const taskById = (id) => state.tasks.find((t) => t.id === id);
 const scopeById = (id) => state.scopes.find((s) => s.id === id);
@@ -69,12 +69,13 @@ function renderGoal() {
   const { goal } = state;
   $('goalTitle').textContent = goal.title;
   const m = goal.metric || {};
-  // Счётчики под баром: показатель цели и продажи. Продаж пока нет — счётчик закрыт до релиза.
+  // Счётчики под баром: показатель цели, продажи (закрыты до релиза) и текущий спринт.
   $('metric').innerHTML = `${m.label ? `<div class="stat"><b>${nf.format(m.value || 0)}</b><span>${esc(m.label)}</span></div>` : ''}
     <div class="stat locked" title="Счётчик откроется, когда игра начнёт продаваться">
       <b><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.6"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg></b>
       <span>Продажи</span>
-    </div>`;
+    </div>
+    ${sprintStatHtml(state.sprintsTeam)}`;
   if (document.activeElement !== $('gT')) $('gT').value = goal.title;
   if (document.activeElement !== $('gM')) $('gM').value = m.value ?? 0;
   $('gMl').textContent = m.label || 'Показатель';
@@ -174,10 +175,10 @@ function renderTasks() {
   const cls = (t) => [t.done && 'done', fresh.has(t.id) && 'justdone', settling.has(t.id) && 'settle', open.has(t.id) && 'open'].filter(Boolean).join(' ');
   $('tasks').innerHTML =
     `<ul class="cl" style="--c:${scope?.color ?? 'var(--accent)'}">${list.map((t) => {
-      // Критерии и зависимости в интерфейсе не показываем; раскрыть можно только, кто принял.
+      // Критерии и зависимости в интерфейсе не показываем; раскрыть можно, когда закрыта (и кто принял, если указано).
       const hasMore = t.done;
       const details = hasMore && open.has(t.id) ? `<div class="det">
-        ${t.done ? `<p class="note"><b>Принято:</b> ${esc(t.acceptedBy)}${t.doneAt ? `, ${fmtDate(t.doneAt)}` : ''}</p>` : ''}
+        ${t.done ? `<p class="note"><b>${t.acceptedBy ? 'Принято:' : 'Закрыта'}</b> ${t.acceptedBy ? `${esc(t.acceptedBy)}${t.doneAt ? `, ${fmtDate(t.doneAt)}` : ''}` : fmtDate(t.doneAt)}</p>` : ''}
       </div>` : '';
       return `<li class="${cls(t)}" data-task="${esc(t.id)}">
         <div class="row">
@@ -296,24 +297,16 @@ function celebrate(prev) {
   closedMs.forEach((m) => setTimeout(() => finale(m.id), closedScopes.length ? 1600 : 900));
 }
 
-// Диалог закрытия: нужно только указать, кто принял. Критерии приёмки отмечаются при закрытии сами.
-function askClose(t) {
-  pending = { id: t.id, mode: 'close' };
-  $('dTitle').textContent = 'Закрыть задачу?';
-  $('dBody').innerHTML = `<p>«${esc(t.title)}» будет отмечена принятой для всей команды.</p>
-    <label class="dl" for="dWho">Кто принял результат</label>
-    <input id="dWho" name="who" maxlength="80" autocomplete="name" value="${esc(lsGet('acceptedBy'))}">`;
-  $('dOk').textContent = 'Задача принята';
-  syncCloseBtn();
-  $('dlg').showModal();
-  $('dWho').focus();
-}
-
-function syncCloseBtn() {
-  if (pending?.mode !== 'close') return;
-  const t = taskById(pending.id);
-  const ok = t && $('dWho')?.value.trim();
-  $('dOk').disabled = !ok;
+// Закрытие — сразу по галочке, без диалога. Критерии приёмки сервер требует отмеченными,
+// поэтому сайт отмечает их вместе с закрытием.
+const closing = new Set();
+async function closeTask(t) {
+  if (closing.has(t.id)) return;
+  closing.add(t.id);
+  try {
+    const checks = t.criteria.map(() => true);
+    await api('PATCH', `/api/tasks/${encodeURIComponent(t.id)}`, { ...(checks.length ? { checks } : {}), done: true });
+  } catch (err) { toast(err.message); } finally { closing.delete(t.id); }
 }
 
 function askReopen(t) {
@@ -325,24 +318,13 @@ function askReopen(t) {
   $('dlg').showModal();
 }
 
-$('dBody').addEventListener('input', syncCloseBtn);
-$('dBody').addEventListener('change', syncCloseBtn);
-
 $('dForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const p = pending;
   const t = p && taskById(p.id);
   if (!t) { $('dlg').close(); return; }
   try {
-    if (p.mode === 'close') {
-      const checks = t.criteria.map(() => true); // сервер закрывает задачу только с отмеченными критериями
-      const who = $('dWho').value.trim();
-      await api('PATCH', `/api/tasks/${encodeURIComponent(t.id)}`, { ...(checks.length ? { checks } : {}), done: true, acceptedBy: who });
-      lsSet('acceptedBy', who);
-      toast('Задача принята');
-    } else {
-      await api('PATCH', `/api/tasks/${encodeURIComponent(t.id)}`, { done: false });
-    }
+    await api('PATCH', `/api/tasks/${encodeURIComponent(t.id)}`, { done: false });
     $('dlg').close();
     pending = null;
   } catch (err) { toast(err.message); }
@@ -393,7 +375,7 @@ document.addEventListener('change', async (e) => {
   if (c.matches('.cl .row input[type=checkbox]')) {
     c.checked = !c.checked; // меняем только после подтверждения
     const t = taskById(c.dataset.id);
-    if (t) (t.done ? askReopen : askClose)(t);
+    if (t) (t.done ? askReopen : closeTask)(t);
   }
 });
 
@@ -433,7 +415,6 @@ function connect() {
     $('offline').hidden = true;
     if (pending && !taskById(pending.id)) $('dlg').close();
     if (prev) celebrate(prev); else render();
-    if (pending?.mode === 'close') syncCloseBtn();
   });
   es.onerror = () => { $('offline').hidden = false; };
 }

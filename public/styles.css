@@ -37,6 +37,23 @@ h1 { font-weight: 600; font-size: clamp(20px, 2.6vw, 26px); line-height: 1.25; m
 .metric .stat b { display: grid; place-items: center; height: 26px; font-family: var(--display); font-size: 22px; font-weight: 600; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
 .metric .stat span { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .metric .locked { cursor: default; }
+/* Виджет спринта: круговая диаграмма, процент в центре, ведёт на /sprint */
+.metric { align-items: stretch; }
+.metric .stat { align-content: end; }
+.metric .sprintw { color: inherit; text-decoration: none; padding-top: 2px; padding-bottom: 2px; border-radius: 0 12px 12px 0; transition: background .15s; }
+.metric .sprintw:hover { background: var(--track); }
+.metric .sprintw .gauge { position: relative; display: block; width: 64px; height: 64px; }
+.metric .sprintw svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.metric .sprintw circle { fill: none; stroke-width: 7; }
+.metric .sprintw .val { stroke-linecap: round; }
+.metric .sprintw .trk { stroke: var(--track); }
+.metric .sprintw:hover .trk { stroke: var(--line); }
+.metric .sprintw .val { stroke: var(--accent); transition: stroke-dasharray .8s cubic-bezier(.2, .7, .2, 1); }
+.metric .sprintw.full .val { stroke: #1F9D55; }
+.metric .sprintw .gauge b { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); height: auto; display: flex; justify-content: center; align-items: baseline; font-size: 17px; }
+.metric .sprintw .gauge b small { font-size: .55em; font-weight: 400; color: var(--muted); margin-left: 1px; }
+.metric .sprintw .lbl { color: var(--accent); font-weight: 500; }
+.metric .sprintw .lbl::after { content: " ›"; }
 .metric .locked b, .metric .locked span { color: var(--faint); }
 .metric .locked svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 
@@ -152,7 +169,6 @@ dialog::backdrop { background: rgba(23, 26, 43, .35); }
 dialog h3 { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
 dialog p { margin: 0 0 14px; color: var(--muted); }
 dialog .dl { display: block; font-size: 13px; color: var(--ink); font-weight: 500; margin: 0 0 8px; }
-dialog #dWho { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-bottom: 18px; }
 .dact { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .toast, .offline { position: fixed; left: 50%; transform: translateX(-50%); border-radius: 12px; font-weight: 500; max-width: 90vw; z-index: 20; }
 .toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--surface); padding: 10px 16px; opacity: 0; pointer-events: none; transition: opacity .25s; }
@@ -164,6 +180,7 @@ dialog #dWho { width: 100%; border: 1px solid var(--line); background: var(--bg)
   .l1 { margin-bottom: 40px; }
   .sc { grid-template-columns: minmax(0, 1fr) 56px; gap: 10px 12px; }
   .sc .bar { grid-column: 1 / -1; grid-row: 2; }
+  .metric .stat { padding: 0 14px; }
   .ladder ol { grid-template-columns: 1fr 1fr; }
   .det { margin-left: 0; }
 }

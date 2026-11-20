@@ -94,16 +94,18 @@ test('процент считается внутри рубежа, другие 
   assert.equal(sum.percent, 0); // активный рубеж не изменился
 });
 
-test('задача не закрывается без всех критериев и без принявшего, зависимости закрытию не мешают', async () => {
+test('задача не закрывается без всех критериев, имя принявшего необязательно, зависимости закрытию не мешают', async () => {
   const store = await fresh();
   const base = await store.addTask({ scope: 'design', title: 'Документ', criteria: ['Описан'] });
   const t = await store.addTask({ scope: 'code', title: 'В билде', criteria: ['Работает', 'Проверено'], blockedBy: [base.id] });
   await assert.rejects(store.updateTask(t.id, { done: true, acceptedBy: 'PO' }), /Не отмечены критерии/);
   await store.checkCriterion(t.id, 0, true);
   await store.checkCriterion(t.id, 1, true);
-  await assert.rejects(store.updateTask(t.id, { done: true }), ValidationError);
-  const closed = await store.updateTask(t.id, { done: true, acceptedBy: 'Дмитрий' });
-  assert.equal(closed.acceptedBy, 'Дмитрий');
+  const closed = await store.updateTask(t.id, { done: true });
+  assert.equal(closed.done, true);
+  assert.equal(closed.acceptedBy, null);
+  await store.updateTask(t.id, { done: false });
+  assert.equal((await store.updateTask(t.id, { done: true, acceptedBy: 'Дмитрий' })).acceptedBy, 'Дмитрий');
   assert.equal(store.snapshot().tasks.find((x) => x.id === base.id).done, false);
   await store.updateTask(base.id, { checks: [true], done: true, acceptedBy: 'PO' });
   await store.updateTask(base.id, { done: false });
@@ -152,8 +154,65 @@ test('файл плана загружается и проверяется на 
   const store = await new Store(path.join(dir, 'db.json'), { seedFile: ok }).load();
   assert.equal(store.snapshot().summary.percent, 50);
 
-  plan.tasks[0].acceptedBy = null;
+  plan.tasks[0].criteria[0].done = false;
   const bad = path.join(dir, 'bad.json');
   await writeFile(bad, JSON.stringify(plan));
-  await assert.rejects(loadSeedFile(bad), /не указано, кто принял/);
+  await assert.rejects(loadSeedFile(bad), /не все её критерии отмечены/);
+});
+
+test('план и файл данных с повторяющимся id задачи не загружаются', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'tp-'));
+  const data = {
+    goal: { title: 'Цель' },
+    scopes: [{ id: 'a', name: 'A', color: '#000' }],
+    tasks: [
+      { id: 'x', scope: 'a', title: 'Первая', weight: 1 },
+      { id: 'x', scope: 'a', title: 'Вторая', weight: 1 },
+    ],
+  };
+  const plan = path.join(dir, 'plan.json');
+  await writeFile(plan, JSON.stringify(data));
+  await assert.rejects(loadSeedFile(plan), /id задач повторяются: x/);
+
+  const db = path.join(dir, 'db.json');
+  await writeFile(db, JSON.stringify(data));
+  await assert.rejects(new Store(db).load(), /db\.json: id задач повторяются: x/);
+});
+
+test('оценка SP из названия и метрики спринта считаются по правилам таблицы', async () => {
+  const { estimateFromTitle, sprintMetrics } = await import('../src/sprints.js');
+  assert.equal(estimateFromTitle('[DESIGN] Петля (3/1)', 1), 3);
+  assert.equal(estimateFromTitle('[DESIGN] Петля (3/1)', 2), 1);
+  assert.equal(estimateFromTitle('[DESIGN] Слой (5/5.3/1)', 3), 3); // точка тоже разделяет спринты
+  assert.equal(estimateFromTitle('[DESIGN] Хук (2-3)', 1), 3);       // «a-b» читается как b
+  assert.equal(estimateFromTitle('[DESIGN] Хук (2)', 4), 2);         // чисел меньше — берётся последнее
+  assert.equal(estimateFromTitle('[DESIGN] Без оценки', 1), null);
+
+  const m = sprintMetrics({ cards: [
+    { kind: 'План', sp: 4, result: 'Done' },
+    { kind: 'План', sp: 2, result: 'В работе' },
+    { kind: 'Добор', sp: 1, result: 'Done', addDay: 3 },
+    { kind: 'Уточнение', sp: 1, result: 'Done' },
+    { kind: 'План', sp: null, result: 'Снята' },
+  ] });
+  assert.equal(m.velocity, 6);
+  assert.equal(m.throughput, 3);
+  assert.equal(m.sayDo, 4 / 6);
+  assert.equal(m.carryOver, 'спринт идёт'); // есть карточки «В работе»
+  assert.equal(m.firstAddDay, 3);
+  assert.equal(m.unestimatedCards, 1);
+  assert.equal(sprintMetrics({ cards: [{ kind: 'Добор', sp: 1, result: 'Done' }] }).velocity, null); // без плана не считается
+});
+
+test('спринты проверяются при записи и переживают перезапуск', async () => {
+  const store = await fresh();
+  await assert.rejects(store.upsertSprint({ id: 'S1', start: '2026-08-14', end: '2026-08-03' }), ValidationError);
+  await assert.rejects(store.upsertSprint({ id: 'S1', start: '2026-08-03', end: '2026-08-14', cards: [{ title: 'x', kind: 'Срочно' }] }), /Вид карточки/);
+  await store.upsertSprint({ id: 'S1', start: '2026-08-03', end: '2026-08-14', goalStatus: 'частично', cards: [{ title: 'Карточка (2)', result: 'done' }] });
+  await assert.rejects(store.updateCard('S1', 'c9', { result: 'Done' }), NotFoundError);
+  const again = await new Store(store.file).load();
+  const full = again.sprintsFull('2026-08-10');
+  assert.equal(full.sprints[0].goalStatus, 'Частично');
+  assert.equal(full.sprints[0].cards[0].result, 'Done');
+  assert.equal(full.current.workdaysLeft, 5);
 });
